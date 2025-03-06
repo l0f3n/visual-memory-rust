@@ -74,3 +74,12 @@ debug-assertions = false
 incremental = false
 lto = 'fat'
 opt-level = 3
+
+# Centrally,
+# https://github.com/rp-rs/rp2040-project-template
+# Change .cargo/config.toml to use runner = "elf2uf2-rs -d"
+# Additionally:
+# https://github.com/rp-rs/rp-hal#gettting_started
+
+# Haven't touched yet:
+# https://reltech.substack.com/p/getting-started-with-rust-on-a-raspberry
