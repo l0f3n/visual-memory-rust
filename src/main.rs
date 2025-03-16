@@ -10,6 +10,7 @@ use bsp::entry;
 use defmt::*;
 use defmt_rtt as _;
 use embedded_hal::digital::OutputPin;
+#[cfg(not(target_arch = "x86_64"))]
 use panic_probe as _;
 
 // Provide an alias for our BSP so we can switch targets quickly.
@@ -26,6 +27,16 @@ use bsp::hal::{
 use rp2040_hal::fugit::RateExtU32;
 use rp2040_hal::I2C;
 use rp2040_hal::uart::{DataBits, StopBits, UartConfig, UartPeripheral};
+
+use embedded_graphics::{
+    mono_font::{ascii::FONT_5X7, MonoTextStyleBuilder},
+    pixelcolor::BinaryColor,
+    prelude::*,
+    text::{Baseline, Text},
+};
+
+use ssd1306::Ssd1306;
+use ssd1306::prelude::*;
 
 #[entry]
 fn main() -> ! {
@@ -68,21 +79,11 @@ fn main() -> ! {
         ).unwrap();
 
     uart.write_full_blocking(b"Hello World!\r\n");
-    // info!("Startup");
-
-    // This is the correct pin on the Raspberry Pico board. On other boards, even if they have an
-    // on-board LED, it might need to be changed.
-    //
-    // Notably, on the Pico W, the LED is not connected to any of the RP2040 GPIOs but to the cyw43 module instead.
-    // One way to do that is by using [embassy](https://github.com/embassy-rs/embassy/blob/main/examples/rp/src/bin/wifi_blinky.rs)
-    //
-    // If you have a Pico W and want to toggle a LED with a simple GPIO output pin, you can connect an external
-    // LED to one of the GPIO pins, and reference that pin here. Don't forget adding an appropriate resistor
-    // in series with the LED.
+    
     let mut led_pin = pins.led.into_push_pull_output();
 
-    let result = (|| -> Result<(), error::UDisplayError<bsp::hal::i2c::Error>> {
-        let mut i2c = I2C::i2c0(
+    let result = (|| -> Result<(), error::Error> {
+        let i2c = I2C::i2c0(
             pac.I2C0,
             pins.gpio20.reconfigure(), // sda
             pins.gpio21.reconfigure(), // scl
@@ -91,6 +92,28 @@ fn main() -> ! {
             125_000_000.Hz(),
         );
         let i2c_ref_cell = RefCell::new(i2c);
+        let interface = ssd1306::I2CDisplayInterface::new(
+            embedded_hal_bus::i2c::RefCellDevice::new(&i2c_ref_cell)
+        );
+        let mut display = Ssd1306::new(
+            interface,
+            DisplaySize128x32,
+            DisplayRotation::Rotate0,
+        ).into_buffered_graphics_mode();
+        display.init()?;
+        let text_style = MonoTextStyleBuilder::new()
+            .font(&FONT_5X7)
+            .text_color(BinaryColor::On)
+            .build();
+        Text::with_baseline("Hello world!", Point::zero(), text_style, Baseline::Top)
+            .draw(&mut display)?;
+
+        Text::with_baseline("Hello Rust!", Point::new(0, 16), text_style, Baseline::Top)
+            .draw(&mut display)?;
+
+        display.flush()?;
+
+
         // let mut display_buffer = [0x00; ssd1306::BUFFER_SIZE];
         // let display_result = ssd1306::DisplayDriver::new(embedded_hal_bus::i2c::RefCellDevice::new(&i2c_ref_cell), None, &mut display_buffer);
         // let mut display = match display_result {
@@ -109,7 +132,7 @@ fn main() -> ! {
             i += 1;
             led_pin.set_high().unwrap();
             delay.delay_ms(2000);
-            info!("off!");
+            info!("off! {}", i);
             led_pin.set_low().unwrap();
             delay.delay_ms(2000);
             // delay.delay_ms(1000);
@@ -190,7 +213,7 @@ fn main() -> ! {
         }
     })();
     if let Err(error) = result {
-        info!("Error");
+        info!("Error: {}", error);
         loop {
             // uart.write_full_blocking(b"on!\n");
             // info!("on!");
