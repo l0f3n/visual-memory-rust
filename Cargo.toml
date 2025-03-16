@@ -23,9 +23,11 @@ rp-pico = "0.9"
 rp2040-hal = { version = "0.10", features = ["rt", "critical-section-impl"] }
 rp2040-boot2 = "0.3"
 
-nano-rust-drivers = { git = "https://github.com/MindroadGabriel/nano-rust-drivers.git", rev = "9512565314dbcfcbd5e9c80a3d37746152ea9b22", features = ["string-errors"] }
+#nano-rust-drivers = { git = "https://github.com/MindroadGabriel/nano-rust-drivers.git", rev = "9512565314dbcfcbd5e9c80a3d37746152ea9b22", features = ["string-errors"] }
 #nano-rust-drivers = { path = "../nano-rust-drivers", features = ["string-errors"]}
 embedded-hal-bus = "0.3.0"
+ssd1306 = "0.9.0"
+#bmi160 = "1.1.0"
 
 # cargo build/run
 [profile.dev]

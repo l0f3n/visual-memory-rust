@@ -4,6 +4,7 @@
 #![no_std]
 #![no_main]
 
+mod error;
 use core::cell::RefCell;
 use bsp::entry;
 use defmt::*;
@@ -22,8 +23,6 @@ use bsp::hal::{
     sio::Sio,
     watchdog::Watchdog,
 };
-use nano_rust_drivers::{error, ssd1306, ssd1306_registers};
-use nano_rust_drivers::ssd1306_registers::{BLACK, WHITE};
 use rp2040_hal::fugit::RateExtU32;
 use rp2040_hal::I2C;
 use rp2040_hal::uart::{DataBits, StopBits, UartConfig, UartPeripheral};
@@ -47,8 +46,8 @@ fn main() -> ! {
         &mut pac.RESETS,
         &mut watchdog,
     )
-    .ok()
-    .unwrap();
+        .ok()
+        .unwrap();
 
     let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
 
@@ -82,79 +81,6 @@ fn main() -> ! {
     // in series with the LED.
     let mut led_pin = pins.led.into_push_pull_output();
 
-
-    // let dp = Peripherals::take().unwrap();
-    // let pins = arduino_hal::pins!(dp);
-    // let mut serial = arduino_hal::default_serial!(dp, pins, 115200);
-    // print::put_console(serial);
-
-    // let result = (|| -> Result<(), error::UDisplayError<arduino_hal::i2c::Error>> {
-    //     let mut i2c = arduino_hal::I2c::new(
-    //         dp.TWI,
-    //         pins.a4.into_pull_up_input(),
-    //         pins.a5.into_pull_up_input(),
-    //         50000,
-    //     );
-    //     let mut led = pins.d13.into_output();
-    //     let mut button1 = pins.d5.into_pull_up_input();
-    //     let mut button2 = pins.d4.into_pull_up_input();
-    //     let mut button1_last_pressed = button1.is_low();
-    //     let mut button2_last_pressed = button2.is_low();
-    //     let i2c_ref_cell = RefCell::new(i2c);
-    //     let mut accelerometer = bmi160::Driver::new(embedded_hal_bus::i2c::RefCellDevice::new(&i2c_ref_cell), None, None)?;
-    //     let mut buffer = [0x00; ssd1306::BUFFER_SIZE];
-    //     let display_result = ssd1306::DisplayDriver::new(embedded_hal_bus::i2c::RefCellDevice::new(&i2c_ref_cell), None, &mut buffer);
-    //     // print::print_type_name(&display_result);
-    //     //
-    //     // core::result::Result<
-    //     // hackathon_pong_controller::ssd1306::DisplayDriver<embedded_hal_bus::i2c::refcell::RefCellDevice<avr_hal_generic::i2c::I2c<atmega_hal::Atmega,
-    //     // avr_device::devices::atmega328p::TWI,
-    //     // avr_hal_generic::port::Pin<avr_hal_generic::port::mode::Input,
-    //     // atmega_hal::port::PC4>,
-    //     // avr_hal_generic::port::Pin<avr_hal_generic::port::mode::Input,
-    //     // atmega_hal::port::PC5>,
-    //     // avr_hal_generic::clock::MHz16>>>,
-    //     // hackathon_pong_controller::ssd1306_error::Error<avr_hal_generic::i2c::Error>>
-    //     let mut display = match display_result {
-    //         Ok(display) => {
-    //             display
-    //         }
-    //         Err(error) => {
-    //             return Err(error.into());
-    //         }
-    //     };
-    //
-    //     // println!("BMI160 initialized");
-    //     info!("Started");
-
-    // loop {
-    //     // let button1_pressed = button1.is_low();
-    //     // let button2_pressed = button2.is_low();
-    //     // if button1_pressed && !button1_last_pressed {
-    //     //     println!("Button1 pressed");
-    //     // }
-    //     // if button2_pressed && !button2_last_pressed {
-    //     //     println!("Button2 pressed");
-    //     // }
-    //     // button1_last_pressed = button1_pressed;
-    //     // button2_last_pressed = button2_pressed;
-    //     //
-    //     // led.toggle();
-    //     // accelerometer.update()?;
-    //     // if let Some(output_data) = accelerometer.get_output_data() {
-    //     // }
-    //     println!("On");
-    //     display.fill_screen(ssd1306_registers::WHITE);
-    //     display.display()?;
-    //     led.set_high();
-    //     arduino_hal::delay_ms(2000);
-    //
-    //     println!("Off");
-    //     display.fill_screen(ssd1306_registers::BLACK);
-    //     display.display()?;
-    //     led.set_low();
-    //     arduino_hal::delay_ms(2000);
-    // }
     let result = (|| -> Result<(), error::UDisplayError<bsp::hal::i2c::Error>> {
         let mut i2c = I2C::i2c0(
             pac.I2C0,
@@ -165,18 +91,27 @@ fn main() -> ! {
             125_000_000.Hz(),
         );
         let i2c_ref_cell = RefCell::new(i2c);
-        let mut display_buffer = [0x00; ssd1306::BUFFER_SIZE];
-        let display_result = ssd1306::DisplayDriver::new(embedded_hal_bus::i2c::RefCellDevice::new(&i2c_ref_cell), None, &mut display_buffer);
-        let mut display = match display_result {
-            Ok(display) => {
-                display
-            }
-            Err(error) => {
-                return Err(error.into());
-            }
-        };
+        // let mut display_buffer = [0x00; ssd1306::BUFFER_SIZE];
+        // let display_result = ssd1306::DisplayDriver::new(embedded_hal_bus::i2c::RefCellDevice::new(&i2c_ref_cell), None, &mut display_buffer);
+        // let mut display = match display_result {
+        //     Ok(display) => {
+        //         display
+        //     }
+        //     Err(error) => {
+        //         return Err(error.into());
+        //     }
+        // };
 
+        let mut i = 0;
         loop {
+            uart.write_full_blocking(b"Uart loop\r\n");
+            info!("on!");
+            i += 1;
+            led_pin.set_high().unwrap();
+            delay.delay_ms(2000);
+            info!("off!");
+            led_pin.set_low().unwrap();
+            delay.delay_ms(2000);
             // delay.delay_ms(1000);
             // display.fill_screen(ssd1306_registers::BLACK);
             // display.display()?;
@@ -187,20 +122,22 @@ fn main() -> ! {
             // display.display()?;
             // led_pin.set_low().unwrap();
             // delay.delay_ms(1000);
-            display.fill_screen(ssd1306_registers::BLACK);
-            display.display()?;
-            delay.delay_ms(1000);
-            display.fill_screen(ssd1306_registers::WHITE);
-            led_pin.set_high().unwrap();
-            for i in 0..=ssd1306::BUFFER_SIZE {
-                led_pin.set_high().unwrap();
-                delay.delay_ms(20);
-                led_pin.set_low().unwrap();
-                delay.delay_ms(20);
-                display.display_num(i)?;
-            }
-            led_pin.set_low().unwrap();
-            delay.delay_ms(1000);
+
+            // display.fill_screen(ssd1306_registers::BLACK);
+            // display.display()?;
+            // delay.delay_ms(1000);
+            // display.fill_screen(ssd1306_registers::WHITE);
+            // led_pin.set_high().unwrap();
+            // for i in 0..=ssd1306::BUFFER_SIZE {
+            //     led_pin.set_high().unwrap();
+            //     delay.delay_ms(20);
+            //     led_pin.set_low().unwrap();
+            //     delay.delay_ms(20);
+            //     display.display_num(i)?;
+            // }
+            // led_pin.set_low().unwrap();
+            // delay.delay_ms(1000);
+
             // display.display_num(10)?;
             // delay.delay_ms(1000);
 
@@ -266,14 +203,7 @@ fn main() -> ! {
         }
         // info!("Error: {}", error);
     }
-    loop {
-        info!("on!");
-        led_pin.set_high().unwrap();
-        delay.delay_ms(200);
-        info!("off!");
-        led_pin.set_low().unwrap();
-        delay.delay_ms(200);
-    }
+    loop {}
 }
 
 // End of file
