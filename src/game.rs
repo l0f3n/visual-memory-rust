@@ -31,6 +31,9 @@ const SCREEN_WIDTH: u32 = 128;
 const SCREEN_HEIGHT: u32 = 32;
 const FONT_WIDTH: u32 = 6;
 const FONT_HEIGHT: u32 = 10;
+const BLOCK_GROUPING_EXTRA_SPACING: u32 = 2;
+const BLOCK_LINE_HEIGHT: u32 = 2;
+const BLOCK_SPACE: u32 = 2;
 
 #[derive(Format, PartialEq, Clone, Copy)]
 enum GameState {
@@ -122,13 +125,13 @@ impl<
             let button2_down = self.button2_pin.is_low().unwrap();
             let button1_fell = debounce.update(0, button1_down) == DebounceResult::Pressed;
             let button2_fell = debounce.update(1, button2_down) == DebounceResult::Pressed;
-
-            if button1_fell {
-                info!("B1 pressed");
-            }
-            if button2_fell {
-                info!("B2 pressed");
-            }
+            // 
+            // if button1_fell {
+            //     info!("B1 pressed");
+            // }
+            // if button2_fell {
+            //     info!("B2 pressed");
+            // }
 
             self.display.clear_buffer();
             self.reset_cursor();
@@ -146,7 +149,6 @@ impl<
                         game_state = GameState::Displaying;
                         next_guess_index = 0;
                         highest_cleared = 0;
-                        self.generate_sequence(50, &mut sequence);
                         self.set_starting_sequence(&mut sequence);
                         first = true;
                     } else {
@@ -165,7 +167,11 @@ impl<
                     self.draw_string(": ")?;
                     self.draw_sequence(&sequence, sequence.len())?;
                     self.display.flush()?;
-                    self.delay.delay_ms(2000);
+                    if sequence.len() > 6 {
+                        self.delay.delay_ms(2000 + 200 * (sequence.len() as u32 - 6));
+                    } else {
+                        self.delay.delay_ms(2000);
+                    }
                     game_state = GameState::Inputting;
                     if first {
                         self.display_temporary_message("Repeat!", 1000)?;
@@ -261,6 +267,10 @@ impl<
     ) -> Result<(), Error> {
         for i in 0..subset_length {
             let value = sequence[i];
+            if i % 3 == 0 {
+                // Create a grouping that's easier to parse when facing long sequences
+                self.cursor.x += BLOCK_GROUPING_EXTRA_SPACING as i32;
+            }
             self.draw_block_wrapping(value)?;
         }
         Ok(())
@@ -276,16 +286,14 @@ impl<
     }
 
     fn draw_block_wrapping(&mut self, value: bool) -> Result<(), Error> {
-        const BLOCK_LINE_HEIGHT: u32 = 2;
-        const BLOCK_SPACE: u32 = 3;
         if self.cursor.x as u32 > SCREEN_WIDTH - FONT_WIDTH {
             self.cursor.x = 0;
             self.cursor.y += FONT_HEIGHT as i32;
         }
         let block = if value {
-            Rectangle::new(self.cursor, Size::new(FONT_WIDTH, FONT_HEIGHT))
+            Rectangle::new(self.cursor, Size::new(FONT_WIDTH, FONT_HEIGHT - 1))
         } else {
-            Rectangle::new(Point::new(self.cursor.x, self.cursor.y + FONT_HEIGHT as i32 - BLOCK_LINE_HEIGHT as i32), Size::new(FONT_WIDTH, BLOCK_LINE_HEIGHT))
+            Rectangle::new(Point::new(self.cursor.x, self.cursor.y + FONT_HEIGHT as i32 - BLOCK_LINE_HEIGHT as i32 - 1), Size::new(FONT_WIDTH, BLOCK_LINE_HEIGHT))
         };
         block.into_styled(PrimitiveStyle::with_fill(BinaryColor::On)).draw(&mut self.display)?;
         self.cursor.x += FONT_WIDTH as i32 + BLOCK_SPACE as i32;
