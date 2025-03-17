@@ -28,11 +28,16 @@ use bsp::hal::{
     sio::Sio,
     watchdog::Watchdog,
 };
-use rp2040_hal::fugit::RateExtU32;
-use rp2040_hal::gpio::bank0::{Gpio25, Gpio7};
-use rp2040_hal::gpio::{FunctionSio, Pin, PullDown, SioInput, SioOutput};
-use rp2040_hal::uart::{DataBits, StopBits, UartConfig, UartPeripheral};
-use rp2040_hal::I2C;
+use cortex_m::prelude::_embedded_hal_adc_OneShot;
+use rp2040_hal::{
+    Adc,
+    I2C,
+    uart::{DataBits, StopBits, UartConfig, UartPeripheral},
+    gpio::{FunctionSio, Pin, PullDown, SioInput, SioOutput},
+    gpio::bank0::{Gpio25, Gpio7},
+    fugit::RateExtU32,
+    adc::AdcPin
+};
 
 #[entry]
 fn main() -> ! {
@@ -75,8 +80,20 @@ fn main() -> ! {
     uart.write_full_blocking(b"Hello World!\r\n");
 
     let mut led_pin = pins.led.into_push_pull_output();
-    let mut button1_pin = pins.gpio7.into_pull_up_input();
-    let mut button2_pin = pins.gpio8.into_pull_up_input();
+    let button1_pin = pins.gpio7.into_pull_up_input();
+    let button2_pin = pins.gpio8.into_pull_up_input();
+    let mut adc = Adc::new(pac.ADC, &mut pac.RESETS);
+    let mut adc_pin_0 = AdcPin::new(pins.gpio28.into_floating_input()).unwrap();
+    let seed: u16 = adc.read(&mut adc_pin_0).unwrap();
+
+    // use embedded_hal_0_2::adc::OneShot;
+    // use rp2040_hal::{adc::Adc, adc::AdcPin, gpio::Pins, pac, Sio};
+    // let mut peripherals = pac::Peripherals::take().unwrap();
+    // let sio = Sio::new(peripherals.SIO);
+    // let pins = Pins::new(peripherals.IO_BANK0, peripherals.PADS_BANK0, sio.gpio_bank0, &mut peripherals.RESETS);
+    // Enable adc
+    // Configure one of the pins as an ADC input
+    // Read the ADC counts from the ADC channel
     // pins(&mut led_pin, &mut button1_pin);
 
     let result = (|| -> Result<(), error::Error> {
@@ -84,15 +101,14 @@ fn main() -> ! {
             pac.I2C0,
             pins.gpio20.reconfigure(), // sda
             pins.gpio21.reconfigure(), // scl
-            50.kHz(),
+            400.kHz(),
             &mut pac.RESETS,
             125_000_000.Hz(),
         );
         let i2c_ref_cell = RefCell::new(i2c);
         let i2c = embedded_hal_bus::i2c::RefCellDevice::new(&i2c_ref_cell);
-        // let rng = Rng::new();
 
-        let mut game = crate::game::Game::new(button1_pin, button2_pin, &mut led_pin, &mut delay, i2c, uart)?;
+        let mut game = game::Game::new(button1_pin, button2_pin, &mut led_pin, &mut delay, i2c, uart, seed as u64)?;
         game.run_game()?;
         Ok(())
     })();
@@ -108,7 +124,3 @@ fn main() -> ! {
     loop {}
 }
 
-// fn pins(led_pin: &mut Pin<Gpio25, FunctionSio<SioOutput>, PullDown>, button1_pin: &mut Pin<Gpio7, FunctionSio<SioInput>, PullDown>) {
-//     led_pin.set_high();
-//     button1_pin.is_high();
-// }

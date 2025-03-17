@@ -25,6 +25,11 @@ use ssd1306::mode::{BufferedGraphicsMode, DisplayConfig};
 use ssd1306::prelude::{DisplayRotation, DisplaySize128x32, I2CInterface};
 use ssd1306::Ssd1306;
 
+const SCREEN_WIDTH: u32 = 128;
+const SCREEN_HEIGHT: u32 = 32;
+const FONT_WIDTH: u32 = 6;
+const FONT_HEIGHT: u32 = 10;
+
 #[derive(Format, PartialEq, Clone, Copy)]
 enum GameState {
     Menu,
@@ -51,27 +56,30 @@ pub struct Game<
     uart: UartPeripheral<Enabled, D, P>,
     display: Ssd1306<I2CInterface<I2C>, DisplaySize128x32, BufferedGraphicsMode<DisplaySize128x32>>,
     text_style: MonoTextStyle<'a, BinaryColor>,
+    rng: fastrand::Rng,
     cursor: Point,
 }
 
 impl<
-    'a,
-    B1Pin: InputPin,
-    B2Pin: InputPin,
-    LedPin: OutputPin,
-    I2C: embedded_hal::i2c::I2c,
-    D: UartDevice,
-    P: ValidUartPinout<D>,
-> Game<'a, B1Pin, B2Pin, LedPin, I2C, D, P>
+        'a,
+        B1Pin: InputPin,
+        B2Pin: InputPin,
+        LedPin: OutputPin,
+        I2C: embedded_hal::i2c::I2c,
+        D: UartDevice,
+        P: ValidUartPinout<D>,
+    > Game<'a, B1Pin, B2Pin, LedPin, I2C, D, P>
 {
     pub fn new(
-        mut button1_pin: B1Pin,
-        mut button2_pin: B2Pin,
+        button1_pin: B1Pin,
+        button2_pin: B2Pin,
         led_pin: &'a mut LedPin,
         delay: &'a mut Delay,
         i2c: I2C,
         uart: UartPeripheral<Enabled, D, P>,
+        seed: u64,
     ) -> Result<Self, Error> {
+        let rng = fastrand::Rng::with_seed(seed);
         let interface = ssd1306::I2CDisplayInterface::new(i2c);
         let mut display = Ssd1306::new(interface, DisplaySize128x32, DisplayRotation::Rotate0)
             .into_buffered_graphics_mode();
@@ -88,22 +96,17 @@ impl<
             uart,
             display,
             text_style,
+            rng,
             cursor: Point::zero(),
         })
     }
     pub fn run_game(&mut self) -> Result<(), Error> {
         let mut debouncer_storage = [0x00u8; 2];
         let mut debounce = debouncing::Debouncer::new(&mut debouncer_storage);
-        // let mut rng = rand::rng();
-
-        // Text::with_baseline("Hello Rust!", Point::new(0, 9), text_style, Baseline::Top)
-        //     .draw(&mut display)?;
-        // Text::with_baseline("Hello Rust!", Point::new(0, 18), text_style, Baseline::Top)
-        //     .draw(&mut display)?;
 
         const MAX_SEQUENCE: usize = 128;
         let mut sequence_storage = [MaybeUninit::new(false); MAX_SEQUENCE];
-        let mut sequence = fixed_slice_vec::FixedSliceVec::new(&mut sequence_storage[..]);
+        let mut sequence = FixedSliceVec::new(&mut sequence_storage[..]);
         sequence.clear();
         let mut game_state = GameState::Menu;
         let mut last_game_state = GameState::Score;
@@ -140,12 +143,12 @@ impl<
                         game_state = GameState::Displaying;
                         next_guess_index = 0;
                         highest_cleared = 0;
-                        self.generate_sequence(3, &mut sequence);
+                        self.generate_sequence(50, &mut sequence);
                         first = true;
                     } else {
                         if button1_fell {
                             sequence.push(false);
-                        } else if button1_fell {
+                        } else if button2_fell {
                             sequence.push(true);
                         }
                         self.render_sequence(&sequence, sequence.len())?;
@@ -166,9 +169,6 @@ impl<
                 }
                 GameState::Inputting => {
                     self.write_string(": ")?;
-                    // let next_point =
-                    //     Text::with_baseline(": ", Point::zero(), text_style, Baseline::Top)
-                    //         .draw(&mut display)?;
                     if button1_fell {
                         if sequence[next_guess_index] == false {
                             next_guess_index += 1;
@@ -194,14 +194,15 @@ impl<
                     } else {
                         self.display_temporary_message("Good! Next:", 400)?;
                     }
-                    self.generate_sequence(sequence.len() + 1, &mut sequence);
                     next_guess_index = 0;
                     highest_cleared = sequence.len();
                     game_state = GameState::Displaying;
                     first = false;
+                    self.generate_sequence(sequence.len() + 1, &mut sequence);
                 }
                 GameState::Failure => {
                     self.display_temporary_message("No!", 200)?;
+                    self.write_string(": ")?;
                     self.render_sequence(&sequence, sequence.len())?;
                     self.display.flush()?;
                     self.delay.delay_ms(2000);
@@ -212,26 +213,24 @@ impl<
                     let score =
                         highest_cleared as f32 + next_guess_index as f32 / sequence.len() as f32;
                     self.write_float_string(score)?;
-                    self.write_string("\nsequences!")?;
+                    self.cursor = Point::new(0, 10);
+                    self.write_string("sequences!")?;
                     if button1_fell || button2_fell {
                         game_state = GameState::Menu;
                         sequence.clear();
                     }
                 }
             }
-            self.display.flush()?;
-
             self.led_pin.set_high().unwrap();
-            self.delay.delay_ms(5);
+            self.display.flush()?;
             self.led_pin.set_low().unwrap();
-            self.delay.delay_ms(5);
         }
     }
 
-    fn generate_sequence(&self, length: usize, sequence: &mut FixedSliceVec<bool>) {
+    fn generate_sequence(&mut self, length: usize, sequence: &mut FixedSliceVec<bool>) {
         sequence.clear();
         for i in 0..length {
-            sequence.push(i % 2 == 0);
+            sequence.push(self.rng.bool());
         }
     }
 
@@ -245,8 +244,16 @@ impl<
         Ok(())
     }
 
-    fn render_sequence(&mut self, sequence: &FixedSliceVec<bool>, subset_length: usize) -> Result<(), Error> {
+    fn render_sequence(
+        &mut self,
+        sequence: &FixedSliceVec<bool>,
+        subset_length: usize,
+    ) -> Result<(), Error> {
         for i in 0..subset_length {
+            if self.cursor.x as u32 > SCREEN_WIDTH - FONT_WIDTH {
+                self.cursor.x = 0;
+                self.cursor.y += FONT_HEIGHT as i32;
+            }
             let value = sequence[i];
             if value {
                 self.write_string("1")?;
@@ -270,7 +277,7 @@ impl<
 
     fn write_float_string(&mut self, value: f32) -> Result<(), Error> {
         let mut buffer = [0x00u8; 12];
-        let string = format_no_std::show(&mut buffer, format_args!(""))?;
+        let string = format_no_std::show(&mut buffer, format_args!("{:0.1}", value))?;
         self.write_string(string)?;
         Ok(())
     }
