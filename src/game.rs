@@ -1,34 +1,18 @@
-#![allow(unused_imports)]
-
-use crate::debouncing;
 use crate::debouncing::{DebounceResult, Debouncer};
 use crate::error::Error;
-use core::fmt::Binary;
 use core::mem::MaybeUninit;
-use cortex_m::delay::Delay;
 use defmt::*;
+use embedded_graphics::draw_target::DrawTarget;
 use embedded_graphics::geometry::Point;
 use embedded_graphics::mono_font::ascii::*;
 use embedded_graphics::mono_font::{MonoTextStyle, MonoTextStyleBuilder};
 use embedded_graphics::pixelcolor::BinaryColor;
+use embedded_graphics::prelude::{Primitive, Size};
+use embedded_graphics::primitives::{PrimitiveStyle, Rectangle};
 use embedded_graphics::text::{Baseline, Text};
 use embedded_graphics::Drawable;
-use embedded_graphics::prelude::{PixelIteratorExt, Primitive, Size};
-use embedded_graphics::primitives::{PrimitiveStyle, Rectangle};
-use embedded_hal::digital::{InputPin, OutputPin};
-use embedded_hal_bus::i2c::RefCellDevice;
 use fixed_slice_vec::FixedSliceVec;
-use rp2040_hal::gpio::bank0::{Gpio0, Gpio1, Gpio20, Gpio21, Gpio25};
-use rp2040_hal::gpio::{FunctionI2c, FunctionSio, FunctionUart, Pin, PullDown, PullUp, SioOutput};
-use rp2040_hal::pac::{I2C0, UART0};
-use rp2040_hal::uart::{Enabled, UartDevice, UartPeripheral, ValidUartPinout};
-use rp2040_hal::I2C;
-use ssd1306::mode::{BufferedGraphicsMode, DisplayConfig};
-use ssd1306::prelude::{DisplayRotation, DisplaySize128x32, I2CInterface};
-use ssd1306::Ssd1306;
 
-const SCREEN_WIDTH: u32 = 128;
-const SCREEN_HEIGHT: u32 = 32;
 const FONT_WIDTH: u32 = 6;
 const FONT_HEIGHT: u32 = 10;
 const BLOCK_GROUPING_EXTRA_SPACING: u32 = 2;
@@ -44,65 +28,64 @@ enum GameState {
     Failure,
     Score,
 }
+pub trait ValidDisplay: DrawTarget<Color = BinaryColor> {
+    fn flush(&mut self) -> Result<(), Error>;
+}
 
 pub struct Game<
     'a,
-    B1Pin: InputPin,
-    B2Pin: InputPin,
-    LedPin: OutputPin,
-    I2C: embedded_hal::i2c::I2c,
-    D: UartDevice,
-    P: ValidUartPinout<D>,
+    FuncGetButton1: FnMut() -> bool,
+    FuncGetButton2: FnMut() -> bool,
+    FuncSetLed: FnMut(bool),
+    FuncDelayMs: FnMut(u32),
+    Display: ValidDisplay,
 > {
-    button1_pin: B1Pin,
-    button2_pin: B2Pin,
-    led_pin: &'a mut LedPin,
-    delay: &'a mut Delay,
-    uart: UartPeripheral<Enabled, D, P>,
-    display: Ssd1306<I2CInterface<I2C>, DisplaySize128x32, BufferedGraphicsMode<DisplaySize128x32>>,
+    get_button_1: FuncGetButton1,
+    get_button_2: FuncGetButton2,
+    set_led: FuncSetLed,
+    delay_ms: FuncDelayMs,
+    display: Display,
     text_style: MonoTextStyle<'a, BinaryColor>,
     rng: fastrand::Rng,
     cursor: Point,
+    screen_size: Size,
 }
 
 impl<
         'a,
-        B1Pin: InputPin,
-        B2Pin: InputPin,
-        LedPin: OutputPin,
-        I2C: embedded_hal::i2c::I2c,
-        D: UartDevice,
-        P: ValidUartPinout<D>,
-    > Game<'a, B1Pin, B2Pin, LedPin, I2C, D, P>
+        FuncGetButton1: FnMut() -> bool,
+        FuncGetButton2: FnMut() -> bool,
+        FuncSetLed: FnMut(bool),
+        FuncDelayMs: FnMut(u32),
+        Display: ValidDisplay,
+    > Game<'a, FuncGetButton1, FuncGetButton2, FuncSetLed, FuncDelayMs, Display>
+where
+    Error: From<<Display as DrawTarget>::Error>,
 {
     pub fn new(
-        button1_pin: B1Pin,
-        button2_pin: B2Pin,
-        led_pin: &'a mut LedPin,
-        delay: &'a mut Delay,
-        i2c: I2C,
-        uart: UartPeripheral<Enabled, D, P>,
+        get_button_1: FuncGetButton1,
+        get_button_2: FuncGetButton2,
+        set_led: FuncSetLed,
+        delay_ms: FuncDelayMs,
+        display: Display,
         seed: u64,
     ) -> Result<Self, Error> {
         let rng = fastrand::Rng::with_seed(seed);
-        let interface = ssd1306::I2CDisplayInterface::new(i2c);
-        let mut display = Ssd1306::new(interface, DisplaySize128x32, DisplayRotation::Rotate0)
-            .into_buffered_graphics_mode();
-        display.init()?;
         let text_style = MonoTextStyleBuilder::new()
             .font(&FONT_6X10)
             .text_color(BinaryColor::On)
             .build();
+        let screen_size = display.bounding_box().size;
         Ok(Self {
-            button1_pin,
-            button2_pin,
-            led_pin,
-            delay,
-            uart,
+            get_button_1,
+            get_button_2,
+            set_led,
+            delay_ms,
             display,
             text_style,
             rng,
             cursor: Point::zero(),
+            screen_size,
         })
     }
     pub fn run_game(&mut self) -> Result<(), Error> {
@@ -118,22 +101,14 @@ impl<
         let mut next_guess_index = 0;
         let mut highest_cleared = 0;
         let mut first = true;
-        let mut offset = 0u8;
 
         loop {
-            let button1_down = self.button1_pin.is_low().unwrap();
-            let button2_down = self.button2_pin.is_low().unwrap();
+            let button1_down = (self.get_button_1)();
+            let button2_down = (self.get_button_2)();
             let button1_fell = debounce.update(0, button1_down) == DebounceResult::Pressed;
             let button2_fell = debounce.update(1, button2_down) == DebounceResult::Pressed;
-            // 
-            // if button1_fell {
-            //     info!("B1 pressed");
-            // }
-            // if button2_fell {
-            //     info!("B2 pressed");
-            // }
 
-            self.display.clear_buffer();
+            self.display.clear(BinaryColor::Off)?;
             self.reset_cursor();
 
             if last_game_state != game_state {
@@ -166,11 +141,13 @@ impl<
                     }
                     self.draw_string(": ")?;
                     self.draw_sequence(&sequence, sequence.len())?;
+                    (self.set_led)(true);
                     self.display.flush()?;
+                    (self.set_led)(false);
                     if sequence.len() > 6 {
-                        self.delay.delay_ms(2000 + 200 * (sequence.len() as u32 - 6));
+                        (self.delay_ms)(2000 + 200 * (sequence.len() as u32 - 6));
                     } else {
-                        self.delay.delay_ms(2000);
+                        (self.delay_ms)(2000);
                     }
                     game_state = GameState::Inputting;
                     if first {
@@ -214,8 +191,10 @@ impl<
                     self.display_temporary_message("No!", 200)?;
                     self.draw_string(": ")?;
                     self.draw_sequence(&sequence, sequence.len())?;
+                    (self.set_led)(true);
                     self.display.flush()?;
-                    self.delay.delay_ms(2000);
+                    (self.set_led)(false);
+                    (self.delay_ms)(2000);
                     game_state = GameState::Score;
                 }
                 GameState::Score => {
@@ -231,9 +210,9 @@ impl<
                     }
                 }
             }
-            self.led_pin.set_high().unwrap();
+            (self.set_led)(true);
             self.display.flush()?;
-            self.led_pin.set_low().unwrap();
+            (self.set_led)(false);
         }
     }
 
@@ -245,7 +224,7 @@ impl<
     }
     fn generate_sequence(&mut self, length: usize, sequence: &mut FixedSliceVec<bool>) {
         sequence.clear();
-        for i in 0..length {
+        for _ in 0..length {
             sequence.push(self.rng.bool());
         }
     }
@@ -276,8 +255,8 @@ impl<
         Ok(())
     }
 
-    fn draw_string_wrapping(&mut self, string: &str) -> Result<(), Error> {
-        if self.cursor.x as u32 > SCREEN_WIDTH - (FONT_WIDTH * string.len() as u32) {
+    fn _draw_string_wrapping(&mut self, string: &str) -> Result<(), Error> {
+        if self.cursor.x as u32 > self.screen_size.width - (FONT_WIDTH * string.len() as u32) {
             self.cursor.x = 0;
             self.cursor.y += FONT_HEIGHT as i32;
         }
@@ -286,27 +265,37 @@ impl<
     }
 
     fn draw_block_wrapping(&mut self, value: bool) -> Result<(), Error> {
-        if self.cursor.x as u32 > SCREEN_WIDTH - FONT_WIDTH {
+        if self.cursor.x as u32 > self.screen_size.width - FONT_WIDTH {
             self.cursor.x = 0;
             self.cursor.y += FONT_HEIGHT as i32;
         }
         let block = if value {
             Rectangle::new(self.cursor, Size::new(FONT_WIDTH, FONT_HEIGHT - 1))
         } else {
-            Rectangle::new(Point::new(self.cursor.x, self.cursor.y + FONT_HEIGHT as i32 - BLOCK_LINE_HEIGHT as i32 - 1), Size::new(FONT_WIDTH, BLOCK_LINE_HEIGHT))
+            Rectangle::new(
+                Point::new(
+                    self.cursor.x,
+                    self.cursor.y + FONT_HEIGHT as i32 - BLOCK_LINE_HEIGHT as i32 - 1,
+                ),
+                Size::new(FONT_WIDTH, BLOCK_LINE_HEIGHT),
+            )
         };
-        block.into_styled(PrimitiveStyle::with_fill(BinaryColor::On)).draw(&mut self.display)?;
+        block
+            .into_styled(PrimitiveStyle::with_fill(BinaryColor::On))
+            .draw(&mut self.display)?;
         self.cursor.x += FONT_WIDTH as i32 + BLOCK_SPACE as i32;
         Ok(())
     }
 
     fn display_temporary_message(&mut self, string: &str, ms: u32) -> Result<(), Error> {
-        self.display.clear_buffer();
+        self.display.clear(BinaryColor::Off)?;
         self.reset_cursor();
         self.draw_string(string)?;
+        (self.set_led)(true);
         self.display.flush()?;
-        self.delay.delay_ms(ms);
-        self.display.clear_buffer();
+        (self.set_led)(false);
+        (self.delay_ms)(ms);
+        self.display.clear(BinaryColor::Off)?;
         self.reset_cursor();
         Ok(())
     }
@@ -317,5 +306,4 @@ impl<
         self.draw_string(string)?;
         Ok(())
     }
-
 }

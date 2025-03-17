@@ -3,7 +3,6 @@
 //! This will blink an LED attached to GP25, which is the pin the Pico uses for the on-board LED.
 #![no_std]
 #![no_main]
-#![allow(unused_imports)]
 
 mod error;
 mod game;
@@ -33,11 +32,14 @@ use rp2040_hal::{
     Adc,
     I2C,
     uart::{DataBits, StopBits, UartConfig, UartPeripheral},
-    gpio::{FunctionSio, Pin, PullDown, SioInput, SioOutput},
-    gpio::bank0::{Gpio25, Gpio7},
     fugit::RateExtU32,
-    adc::AdcPin
+    adc::AdcPin,
 };
+use ssd1306::mode::{BufferedGraphicsMode, DisplayConfig};
+use ssd1306::prelude::{DisplayRotation, DisplaySize128x32, I2CInterface};
+use ssd1306::Ssd1306;
+use crate::error::Error;
+use crate::game::ValidDisplay;
 
 #[entry]
 fn main() -> ! {
@@ -58,8 +60,8 @@ fn main() -> ! {
         &mut pac.RESETS,
         &mut watchdog,
     )
-    .ok()
-    .unwrap();
+        .ok()
+        .unwrap();
 
     let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
 
@@ -80,8 +82,8 @@ fn main() -> ! {
     uart.write_full_blocking(b"Hello World!\r\n");
 
     let mut led_pin = pins.led.into_push_pull_output();
-    let button1_pin = pins.gpio7.into_pull_up_input();
-    let button2_pin = pins.gpio8.into_pull_up_input();
+    let mut button1_pin = pins.gpio7.into_pull_up_input();
+    let mut button2_pin = pins.gpio8.into_pull_up_input();
     let mut adc = Adc::new(pac.ADC, &mut pac.RESETS);
     let mut adc_pin_0 = AdcPin::new(pins.gpio28.into_floating_input()).unwrap();
     let seed: u16 = adc.read(&mut adc_pin_0).unwrap();
@@ -107,8 +109,29 @@ fn main() -> ! {
         );
         let i2c_ref_cell = RefCell::new(i2c);
         let i2c = embedded_hal_bus::i2c::RefCellDevice::new(&i2c_ref_cell);
+        let interface = ssd1306::I2CDisplayInterface::new(i2c);
+        let mut display = Ssd1306::new(interface, DisplaySize128x32, DisplayRotation::Rotate0)
+            .into_buffered_graphics_mode();
+        display.init()?;
 
-        let mut game = game::Game::new(button1_pin, button2_pin, &mut led_pin, &mut delay, i2c, uart, seed as u64)?;
+        // let mut game = game::Game::new(button1_pin, button2_pin, &mut led_pin, &mut delay, display, seed as u64)?;
+        let get_button_1 = || {
+            button1_pin.is_low().unwrap()
+        };
+        let get_button_2 = || {
+            button2_pin.is_low().unwrap()
+        };
+        let set_led = |value: bool| {
+            if value {
+                led_pin.set_high().unwrap();
+            } else {
+                led_pin.set_low().unwrap();
+            }
+        };
+        let delay_ms = |ms: u32| {
+            delay.delay_ms(ms);
+        };
+        let mut game = game::Game::new(get_button_1, get_button_2, set_led, delay_ms, display, seed as u64)?;
         game.run_game()?;
         Ok(())
     })();
@@ -122,5 +145,16 @@ fn main() -> ! {
         }
     }
     loop {}
+}
+
+impl<I2C> ValidDisplay
+for Ssd1306<I2CInterface<I2C>, DisplaySize128x32, BufferedGraphicsMode<DisplaySize128x32>>
+where
+    I2C: embedded_hal::i2c::I2c,
+{
+    fn flush(&mut self) -> Result<(), Error> {
+        Ssd1306::flush(self)?;
+        Ok(())
+    }
 }
 
