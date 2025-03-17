@@ -102,7 +102,7 @@ impl<
     }
     pub fn run_game(&mut self) -> Result<(), Error> {
         let mut debouncer_storage = [0x00u8; 2];
-        let mut debounce = debouncing::Debouncer::new(&mut debouncer_storage);
+        let mut debounce = Debouncer::new(&mut debouncer_storage);
 
         const MAX_SEQUENCE: usize = 128;
         let mut sequence_storage = [MaybeUninit::new(false); MAX_SEQUENCE];
@@ -113,6 +113,7 @@ impl<
         let mut next_guess_index = 0;
         let mut highest_cleared = 0;
         let mut first = true;
+        let mut offset = 0u8;
 
         loop {
             let button1_down = self.button1_pin.is_low().unwrap();
@@ -136,30 +137,44 @@ impl<
             }
             match game_state {
                 GameState::Menu => {
-                    self.write_string(
-                        "Sequence memory! Try\nbuttons. Push both\nbuttons to start.",
-                    )?;
-                    if button1_down && button2_down {
-                        game_state = GameState::Displaying;
-                        next_guess_index = 0;
-                        highest_cleared = 0;
-                        self.generate_sequence(50, &mut sequence);
-                        first = true;
-                    } else {
-                        if button1_fell {
-                            sequence.push(false);
-                        } else if button2_fell {
-                            sequence.push(true);
+                    for i in offset..255 {
+                        if let Some(character) = char::from_u32(i as u32) {
+                            let mut buffer = [0u8; 16];
+                            let slice = format_no_std::show(&mut buffer, format_args!("{}", character))?;
+                            self.draw_string_wrapping(slice)?
                         }
-                        self.render_sequence(&sequence, sequence.len())?;
                     }
+                    if button1_fell {
+                        offset += (SCREEN_WIDTH / FONT_WIDTH) as u8;
+                    }
+                    if button2_fell {
+                        offset -= (SCREEN_WIDTH / FONT_WIDTH) as u8;
+                    }
+                    // self.draw_string(
+                    //     "Sequence memory! Try\nbuttons. Push both\nbuttons to start.",
+                    // )?;
+                    // if button1_down && button2_down {
+                    //     game_state = GameState::Displaying;
+                    //     next_guess_index = 0;
+                    //     highest_cleared = 0;
+                    //     self.generate_sequence(50, &mut sequence);
+                    //     self.set_starting_sequence(&mut sequence);
+                    //     first = true;
+                    // } else {
+                    //     if button1_fell {
+                    //         sequence.push(false);
+                    //     } else if button2_fell {
+                    //         sequence.push(true);
+                    //     }
+                    //     self.draw_sequence(&sequence, sequence.len())?;
+                    // }
                 }
                 GameState::Displaying => {
                     if first {
                         self.display_temporary_message("Remember!", 1000)?;
                     }
-                    self.write_string(": ")?;
-                    self.render_sequence(&sequence, sequence.len())?;
+                    self.draw_string(": ")?;
+                    self.draw_sequence(&sequence, sequence.len())?;
                     self.display.flush()?;
                     self.delay.delay_ms(2000);
                     game_state = GameState::Inputting;
@@ -168,7 +183,7 @@ impl<
                     }
                 }
                 GameState::Inputting => {
-                    self.write_string(": ")?;
+                    self.draw_string(": ")?;
                     if button1_fell {
                         if sequence[next_guess_index] == false {
                             next_guess_index += 1;
@@ -182,7 +197,7 @@ impl<
                             game_state = GameState::Failure;
                         }
                     }
-                    self.render_sequence(&sequence, next_guess_index)?;
+                    self.draw_sequence(&sequence, next_guess_index)?;
                     if next_guess_index == sequence.len() {
                         game_state = GameState::Next;
                     }
@@ -202,19 +217,19 @@ impl<
                 }
                 GameState::Failure => {
                     self.display_temporary_message("No!", 200)?;
-                    self.write_string(": ")?;
-                    self.render_sequence(&sequence, sequence.len())?;
+                    self.draw_string(": ")?;
+                    self.draw_sequence(&sequence, sequence.len())?;
                     self.display.flush()?;
                     self.delay.delay_ms(2000);
                     game_state = GameState::Score;
                 }
                 GameState::Score => {
-                    self.write_string("You cleared ")?;
+                    self.draw_string("You cleared ")?;
                     let score =
                         highest_cleared as f32 + next_guess_index as f32 / sequence.len() as f32;
-                    self.write_float_string(score)?;
+                    self.draw_float_string(score)?;
                     self.cursor = Point::new(0, 10);
-                    self.write_string("sequences!")?;
+                    self.draw_string("sequences!")?;
                     if button1_fell || button2_fell {
                         game_state = GameState::Menu;
                         sequence.clear();
@@ -227,6 +242,12 @@ impl<
         }
     }
 
+    fn set_starting_sequence(&self, sequence: &mut FixedSliceVec<bool>) {
+        sequence.clear();
+        sequence.push(false);
+        sequence.push(false);
+        sequence.push(true);
+    }
     fn generate_sequence(&mut self, length: usize, sequence: &mut FixedSliceVec<bool>) {
         sequence.clear();
         for i in 0..length {
@@ -237,37 +258,43 @@ impl<
     fn reset_cursor(&mut self) {
         self.cursor = Point::zero();
     }
-    fn write_string(&mut self, string: &str) -> Result<(), Error> {
+    fn draw_string(&mut self, string: &str) -> Result<(), Error> {
         let next_point = Text::with_baseline(string, self.cursor, self.text_style, Baseline::Top)
             .draw(&mut self.display)?;
         self.cursor = next_point;
         Ok(())
     }
 
-    fn render_sequence(
+    fn draw_sequence(
         &mut self,
         sequence: &FixedSliceVec<bool>,
         subset_length: usize,
     ) -> Result<(), Error> {
         for i in 0..subset_length {
-            if self.cursor.x as u32 > SCREEN_WIDTH - FONT_WIDTH {
-                self.cursor.x = 0;
-                self.cursor.y += FONT_HEIGHT as i32;
-            }
             let value = sequence[i];
-            if value {
-                self.write_string("1")?;
+            let character = if value {
+                "1"
             } else {
-                self.write_string("0")?;
-            }
+                "0"
+            };
+            self.draw_string_wrapping(character)?;
         }
+        Ok(())
+    }
+
+    fn draw_string_wrapping(&mut self, string: &str) -> Result<(), Error> {
+        if self.cursor.x as u32 > SCREEN_WIDTH - (FONT_WIDTH * string.len() as u32) {
+            self.cursor.x = 0;
+            self.cursor.y += FONT_HEIGHT as i32;
+        }
+        self.draw_string(string)?;
         Ok(())
     }
 
     fn display_temporary_message(&mut self, string: &str, ms: u32) -> Result<(), Error> {
         self.display.clear_buffer();
         self.reset_cursor();
-        self.write_string(string)?;
+        self.draw_string(string)?;
         self.display.flush()?;
         self.delay.delay_ms(ms);
         self.display.clear_buffer();
@@ -275,10 +302,11 @@ impl<
         Ok(())
     }
 
-    fn write_float_string(&mut self, value: f32) -> Result<(), Error> {
+    fn draw_float_string(&mut self, value: f32) -> Result<(), Error> {
         let mut buffer = [0x00u8; 12];
         let string = format_no_std::show(&mut buffer, format_args!("{:0.1}", value))?;
-        self.write_string(string)?;
+        self.draw_string(string)?;
         Ok(())
     }
+
 }
