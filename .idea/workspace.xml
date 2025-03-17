@@ -27,9 +27,9 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="5664101c-90ea-4c2b-ac05-e7383447ba3c" name="Changes" comment="Do a test render">
-      <change afterPath="$PROJECT_DIR$/src/game.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.cargo/config.toml" beforeDir="false" afterPath="$PROJECT_DIR$/.cargo/config.toml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/debouncing.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/game.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/game.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -103,7 +103,7 @@
     "nodejs_package_manager_path": "npm",
     "org.rust.cargo.project.model.PROJECT_DISCOVERY": "true",
     "org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon": "",
-    "settings.editor.selected.configurable": "preferences.keymap",
+    "settings.editor.selected.configurable": "advanced.settings",
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
@@ -212,6 +212,7 @@
       <workItem from="1741960473336" duration="211000" />
       <workItem from="1741960760196" duration="575000" />
       <workItem from="1742118962328" duration="17963000" />
+      <workItem from="1742209623027" duration="2758000" />
     </task>
     <task id="LOCAL-00001" summary="Try to add openocd runner">
       <created>1741697171507</created>

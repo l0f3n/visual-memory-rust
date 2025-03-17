@@ -6,12 +6,13 @@
 
 mod error;
 mod game;
+mod debouncing;
 
 use bsp::entry;
 use core::cell::RefCell;
 use defmt::*;
 use defmt_rtt as _;
-use embedded_hal::digital::OutputPin;
+use embedded_hal::digital::{InputPin, OutputPin};
 #[cfg(not(target_arch = "x86_64"))]
 use panic_probe as _;
 
@@ -27,18 +28,10 @@ use bsp::hal::{
     watchdog::Watchdog,
 };
 use rp2040_hal::fugit::RateExtU32;
-use rp2040_hal::uart::{DataBits, Enabled, StopBits, UartConfig, UartPeripheral};
+use rp2040_hal::gpio::bank0::{Gpio25, Gpio7};
+use rp2040_hal::gpio::{FunctionSio, Pin, PullDown, SioInput, SioOutput};
+use rp2040_hal::uart::{DataBits, StopBits, UartConfig, UartPeripheral};
 use rp2040_hal::I2C;
-
-use embedded_graphics::{
-    mono_font::MonoTextStyleBuilder,
-    pixelcolor::BinaryColor,
-    prelude::*,
-    text::{Baseline, Text},
-};
-use rp2040_hal::gpio::bank0::{Gpio1, Gpio20, Gpio21, Gpio25};
-use rp2040_hal::gpio::{FunctionSio, FunctionUart, Pin, PullDown, PullUp, SioOutput};
-use rp2040_hal::pac::UART0;
 
 #[entry]
 fn main() -> ! {
@@ -81,6 +74,9 @@ fn main() -> ! {
     uart.write_full_blocking(b"Hello World!\r\n");
 
     let mut led_pin = pins.led.into_push_pull_output();
+    let mut button1_pin = pins.gpio7.into_pull_down_input();
+    let mut button2_pin = pins.gpio8.into_pull_down_input();
+    // pins(&mut led_pin, &mut button1_pin);
 
     let result = (|| -> Result<(), error::Error> {
         let i2c = I2C::i2c0(
@@ -94,7 +90,7 @@ fn main() -> ! {
         let i2c_ref_cell = RefCell::new(i2c);
         let i2c = embedded_hal_bus::i2c::RefCellDevice::new(&i2c_ref_cell);
 
-        game::run_game(&mut led_pin, &mut delay, i2c, uart)?;
+        game::run_game(button1_pin, button2_pin, &mut led_pin, &mut delay, i2c, uart)?;
         Ok(())
     })();
     if let Err(error) = result {
@@ -108,3 +104,8 @@ fn main() -> ! {
     }
     loop {}
 }
+
+// fn pins(led_pin: &mut Pin<Gpio25, FunctionSio<SioOutput>, PullDown>, button1_pin: &mut Pin<Gpio7, FunctionSio<SioInput>, PullDown>) {
+//     led_pin.set_high();
+//     button1_pin.is_high();
+// }

@@ -14,12 +14,16 @@ use embedded_graphics::text::{Baseline, Text};
 use embedded_graphics::geometry::Point;
 use ssd1306::mode::DisplayConfig;
 use embedded_graphics::Drawable;
-use embedded_hal::digital::OutputPin;
+use embedded_hal::digital::{InputPin, OutputPin};
 use crate::error::Error;
 use defmt::*;
+use crate::debouncing;
+use crate::debouncing::DebounceResult;
 
-pub fn run_game<PIN: OutputPin, I2C: embedded_hal::i2c::I2c, D, P>(
-    led_pin: &mut PIN,
+pub fn run_game<B1Pin: InputPin, B2Pin: InputPin, LedPin: OutputPin, I2C: embedded_hal::i2c::I2c, D, P>(
+    mut button1_pin: B1Pin,
+    mut button2_pin: B2Pin,
+    led_pin: &mut LedPin,
     delay: &mut Delay,
     i2c: I2C,
     uart: UartPeripheral<Enabled, D, P>,
@@ -36,6 +40,8 @@ where
         .font(&FONT_6X10)
         .text_color(BinaryColor::On)
         .build();
+    let mut debouncer_storage = [0x00u8; 2];
+    let mut debounce = debouncing::Debouncer::new(&mut debouncer_storage);
     Text::with_baseline("One of the saddest\nlessons of history\nis this. If we've been", Point::zero(), text_style, Baseline::Top)
         .draw(&mut display)?;
 
@@ -48,6 +54,11 @@ where
 
     let mut i = 0;
     loop {
+        let button1_down = button1_pin.is_low().unwrap();
+        let button2_down = button2_pin.is_low().unwrap();
+        let button1_pressed = debounce.update(0, button1_down) == DebounceResult::Pressed;
+        let button2_pressed = debounce.update(1, button2_down) == DebounceResult::Pressed;
+
         uart.write_full_blocking(b"Uart loop\r\n");
         info!("on!");
         i += 1;
