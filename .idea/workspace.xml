@@ -11,6 +11,9 @@
   <component name="CMakePresetLoader">{
   &quot;useNewFormat&quot;: true
 }</component>
+  <component name="CMakeProjectFlavorService">
+    <option name="flavorId" value="CMakePlainProjectFlavor" />
+  </component>
   <component name="CMakeRunConfigurationManager">
     <generated />
   </component>
@@ -23,11 +26,10 @@
     <cargoProject FILE="$PROJECT_DIR$/Cargo.toml" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="5664101c-90ea-4c2b-ac05-e7383447ba3c" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/src/error.rs" afterDir="false" />
+    <list default="true" id="5664101c-90ea-4c2b-ac05-e7383447ba3c" name="Changes" comment="Do a test render">
+      <change afterPath="$PROJECT_DIR$/src/game.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.cargo/config.toml" beforeDir="false" afterPath="$PROJECT_DIR$/.cargo/config.toml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main.rs" beforeDir="false" afterPath="$PROJECT_DIR$/src/main.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -79,6 +81,7 @@
   </component>
   <component name="PropertiesComponent"><![CDATA[{
   "keyToString": {
+    "Cargo.Build.executor": "Run",
     "Cargo.Run.executor": "Run",
     "OpenOCD Download & Run.OpenOCD.executor": "Run",
     "RunOnceActivity.OpenProjectViewOnStart": "true",
@@ -99,7 +102,8 @@
     "node.js.selected.package.tslint": "(autodetect)",
     "nodejs_package_manager_path": "npm",
     "org.rust.cargo.project.model.PROJECT_DISCOVERY": "true",
-    "settings.editor.selected.configurable": "advanced.settings",
+    "org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon": "",
+    "settings.editor.selected.configurable": "preferences.keymap",
     "vue.rearranger.settings.migration": "true"
   }
 }]]></component>
@@ -109,8 +113,9 @@
       <recent name="C:\Users\Gabriel\Workspace\LödölRust\rpi-pico-blinky\target\thumbv6m-none-eabi\debug" />
     </key>
   </component>
-  <component name="RunManager" selected="OpenOCD Download &amp; Run.OpenOCD">
+  <component name="RunManager" selected="Cargo.Run">
     <configuration name="Build" type="CargoCommandRunConfiguration" factoryName="Cargo Command" nameIsGenerated="true">
+      <option name="buildProfileId" value="dev" />
       <option name="command" value="build" />
       <option name="workingDirectory" value="file://$PROJECT_DIR$" />
       <envs />
@@ -206,7 +211,7 @@
       <workItem from="1741958514044" duration="1553000" />
       <workItem from="1741960473336" duration="211000" />
       <workItem from="1741960760196" duration="575000" />
-      <workItem from="1742118962328" duration="1307000" />
+      <workItem from="1742118962328" duration="17963000" />
     </task>
     <task id="LOCAL-00001" summary="Try to add openocd runner">
       <created>1741697171507</created>
@@ -229,7 +234,23 @@
       <option name="project" value="LOCAL" />
       <updated>1741949538806</updated>
     </task>
-    <option name="localTasksCounter" value="4" />
+    <task id="LOCAL-00004" summary="Remove custom driver">
+      <option name="closed" value="true" />
+      <created>1742120597351</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1742120597351</updated>
+    </task>
+    <task id="LOCAL-00005" summary="Do a test render">
+      <option name="closed" value="true" />
+      <created>1742129216455</created>
+      <option name="number" value="00005" />
+      <option name="presentableId" value="LOCAL-00005" />
+      <option name="project" value="LOCAL" />
+      <updated>1742129216455</updated>
+    </task>
+    <option name="localTasksCounter" value="6" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -249,6 +270,12 @@
   <component name="VcsManagerConfiguration">
     <MESSAGE value="Try to add openocd runner" />
     <MESSAGE value="Unstable: try adding uart and try writing to screen in chunks" />
-    <option name="LAST_COMMIT_MESSAGE" value="Unstable: try adding uart and try writing to screen in chunks" />
+    <MESSAGE value="Remove custom driver" />
+    <MESSAGE value="Do a test render" />
+    <option name="LAST_COMMIT_MESSAGE" value="Do a test render" />
+  </component>
+  <component name="XSLT-Support.FileAssociations.UIState">
+    <expand />
+    <select />
   </component>
 </project>
