@@ -22,10 +22,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 // SOFTWARE.
 
-#![no_std]
 // use no_std_compat::prelude::v1::*;
-
-use core::mem::MaybeUninit;
 
 pub struct Debouncer<'a> {
     patterns: &'a mut [u8],
@@ -40,7 +37,7 @@ pub enum DebounceResult {
 }
 
 impl<'a> Debouncer<'a> {
-    pub fn new(slice: &'a mut [u8]) -> Debouncer {
+    pub fn new(slice: &'a mut [u8]) -> Debouncer<'a> {
         Debouncer{
             patterns: slice
         }

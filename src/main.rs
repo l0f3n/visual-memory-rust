@@ -3,6 +3,7 @@
 //! This will blink an LED attached to GP25, which is the pin the Pico uses for the on-board LED.
 #![no_std]
 #![no_main]
+#![allow(unused_imports)]
 
 mod error;
 mod game;
@@ -74,8 +75,8 @@ fn main() -> ! {
     uart.write_full_blocking(b"Hello World!\r\n");
 
     let mut led_pin = pins.led.into_push_pull_output();
-    let mut button1_pin = pins.gpio7.into_pull_down_input();
-    let mut button2_pin = pins.gpio8.into_pull_down_input();
+    let mut button1_pin = pins.gpio7.into_pull_up_input();
+    let mut button2_pin = pins.gpio8.into_pull_up_input();
     // pins(&mut led_pin, &mut button1_pin);
 
     let result = (|| -> Result<(), error::Error> {
@@ -89,8 +90,10 @@ fn main() -> ! {
         );
         let i2c_ref_cell = RefCell::new(i2c);
         let i2c = embedded_hal_bus::i2c::RefCellDevice::new(&i2c_ref_cell);
+        // let rng = Rng::new();
 
-        game::run_game(button1_pin, button2_pin, &mut led_pin, &mut delay, i2c, uart)?;
+        let mut game = crate::game::Game::new(button1_pin, button2_pin, &mut led_pin, &mut delay, i2c, uart)?;
+        game.run_game()?;
         Ok(())
     })();
     if let Err(error) = result {
