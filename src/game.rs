@@ -13,6 +13,8 @@ use embedded_graphics::mono_font::{MonoTextStyle, MonoTextStyleBuilder};
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::text::{Baseline, Text};
 use embedded_graphics::Drawable;
+use embedded_graphics::prelude::{PixelIteratorExt, Primitive, Size};
+use embedded_graphics::primitives::{PrimitiveStyle, Rectangle};
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal_bus::i2c::RefCellDevice;
 use fixed_slice_vec::FixedSliceVec;
@@ -137,37 +139,24 @@ impl<
             }
             match game_state {
                 GameState::Menu => {
-                    for i in offset..255 {
-                        if let Some(character) = char::from_u32(i as u32) {
-                            let mut buffer = [0u8; 16];
-                            let slice = format_no_std::show(&mut buffer, format_args!("{}", character))?;
-                            self.draw_string_wrapping(slice)?
+                    self.draw_string(
+                        "Sequence memory! Try\nbuttons. Push both\nbuttons to start.",
+                    )?;
+                    if button1_down && button2_down {
+                        game_state = GameState::Displaying;
+                        next_guess_index = 0;
+                        highest_cleared = 0;
+                        self.generate_sequence(50, &mut sequence);
+                        self.set_starting_sequence(&mut sequence);
+                        first = true;
+                    } else {
+                        if button1_fell {
+                            sequence.push(false);
+                        } else if button2_fell {
+                            sequence.push(true);
                         }
+                        self.draw_sequence(&sequence, sequence.len())?;
                     }
-                    if button1_fell {
-                        offset += (SCREEN_WIDTH / FONT_WIDTH) as u8;
-                    }
-                    if button2_fell {
-                        offset -= (SCREEN_WIDTH / FONT_WIDTH) as u8;
-                    }
-                    // self.draw_string(
-                    //     "Sequence memory! Try\nbuttons. Push both\nbuttons to start.",
-                    // )?;
-                    // if button1_down && button2_down {
-                    //     game_state = GameState::Displaying;
-                    //     next_guess_index = 0;
-                    //     highest_cleared = 0;
-                    //     self.generate_sequence(50, &mut sequence);
-                    //     self.set_starting_sequence(&mut sequence);
-                    //     first = true;
-                    // } else {
-                    //     if button1_fell {
-                    //         sequence.push(false);
-                    //     } else if button2_fell {
-                    //         sequence.push(true);
-                    //     }
-                    //     self.draw_sequence(&sequence, sequence.len())?;
-                    // }
                 }
                 GameState::Displaying => {
                     if first {
@@ -272,12 +261,7 @@ impl<
     ) -> Result<(), Error> {
         for i in 0..subset_length {
             let value = sequence[i];
-            let character = if value {
-                "1"
-            } else {
-                "0"
-            };
-            self.draw_string_wrapping(character)?;
+            self.draw_block_wrapping(value)?;
         }
         Ok(())
     }
@@ -288,6 +272,23 @@ impl<
             self.cursor.y += FONT_HEIGHT as i32;
         }
         self.draw_string(string)?;
+        Ok(())
+    }
+
+    fn draw_block_wrapping(&mut self, value: bool) -> Result<(), Error> {
+        const BLOCK_LINE_HEIGHT: u32 = 2;
+        const BLOCK_SPACE: u32 = 3;
+        if self.cursor.x as u32 > SCREEN_WIDTH - FONT_WIDTH {
+            self.cursor.x = 0;
+            self.cursor.y += FONT_HEIGHT as i32;
+        }
+        let block = if value {
+            Rectangle::new(self.cursor, Size::new(FONT_WIDTH, FONT_HEIGHT))
+        } else {
+            Rectangle::new(Point::new(self.cursor.x, self.cursor.y + FONT_HEIGHT as i32 - BLOCK_LINE_HEIGHT as i32), Size::new(FONT_WIDTH, BLOCK_LINE_HEIGHT))
+        };
+        block.into_styled(PrimitiveStyle::with_fill(BinaryColor::On)).draw(&mut self.display)?;
+        self.cursor.x += FONT_WIDTH as i32 + BLOCK_SPACE as i32;
         Ok(())
     }
 
