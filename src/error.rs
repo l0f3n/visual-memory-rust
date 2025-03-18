@@ -1,5 +1,4 @@
 use std::convert::Infallible;
-use std::fmt::{Display, Formatter, Write};
 #[cfg(not(target_arch = "x86_64"))]
 use defmt::Format;
 
@@ -43,11 +42,3 @@ impl From<Infallible> for Error {
     }
 }
 
-// impl Display for Error {
-//     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-//         match self {
-//             Error::Infallible => f.write_str("Infallible"),
-//             Error::Format => f.write_str("Format"),
-//         }
-//     }
-// }

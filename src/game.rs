@@ -1,5 +1,4 @@
 use crate::debouncing::{DebounceResult, Debouncer};
-use crate::error::Error;
 use core::mem::MaybeUninit;
 // use defmt::*;
 use crate::abstract_device::AbstractDevice;
