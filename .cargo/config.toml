@@ -20,8 +20,8 @@ rustflags = [
 ]
 
 [build]
-target = "thumbv6m-none-eabi"
-#target = "x86_64-pc-windows-gnu"
+#target = "thumbv6m-none-eabi"
+target = "x86_64-pc-windows-gnu"
 
 [env]
 DEFMT_LOG = "debug"
