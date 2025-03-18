@@ -3,22 +3,22 @@
 
 use core::panic::PanicInfo;
 use std::time::Duration;
+use std::{process, thread};
 
+mod abstract_device;
+mod debouncing;
 mod error;
 mod game;
-mod debouncing;
 mod main_rp2040;
 
-use embedded_graphics::{Drawable, Pixel};
-use embedded_graphics::mono_font::MonoTextStyle;
 use embedded_graphics::mono_font::ascii::*;
+use embedded_graphics::mono_font::MonoTextStyle;
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::prelude::{Point, Primitive, Size};
 use embedded_graphics::primitives::{Circle, Line, PrimitiveStyle, Rectangle};
 use embedded_graphics::text::Text;
+use embedded_graphics::{Drawable, Pixel};
 
-#[cfg(not(target_arch = "x86_64"))]
-use rp_pico as bsp;
 #[cfg(not(target_arch = "x86_64"))]
 use bsp::entry;
 #[cfg(not(target_arch = "x86_64"))]
@@ -29,11 +29,18 @@ use embedded_graphics::draw_target::DrawTarget;
 use embedded_graphics::geometry::Dimensions;
 #[cfg(not(target_arch = "x86_64"))]
 use panic_probe as _;
+#[cfg(not(target_arch = "x86_64"))]
+use rp_pico as bsp;
 
-#[cfg(target_arch = "x86_64")]
-use embedded_graphics_simulator::{BinaryColorTheme, OutputSettingsBuilder, SimulatorDisplay, Window};
+use crate::abstract_device::{AbstractDevice, Inputs};
 use crate::error::Error;
 use crate::game::Game;
+use embedded_graphics_simulator::sdl2::Keycode;
+use embedded_graphics_simulator::SimulatorEvent;
+#[cfg(target_arch = "x86_64")]
+use embedded_graphics_simulator::{
+    BinaryColorTheme, OutputSettingsBuilder, SimulatorDisplay, Window,
+};
 
 #[cfg(target_arch = "arm")]
 #[entry]
@@ -47,7 +54,6 @@ fn main() -> ! {
     loop {}
 }
 
-
 #[cfg(target_arch = "x86_64")]
 fn main() -> Result<(), Error> {
     let mut display = SimulatorDisplay::<BinaryColor>::new(Size::new(128, 32));
@@ -55,101 +61,94 @@ fn main() -> Result<(), Error> {
         .theme(BinaryColorTheme::OledBlue)
         .build();
     let window = Window::new("Hello World", &output_settings);
-    let display_and_window = DisplayAndWindow {
-        display,
+    let device = Device {
+        simulator_display: display,
         window,
+        has_updated: false,
+        inputs: Inputs::default(),
     };
-    let get_button_1 = || {
-        false
-    };
-    let get_button_2 = || {
-        false
-    };
-    let set_led = |value| {
+    let mut game = Game::new(device)?;
+    let result = game.run_game();
 
-    };
-    let delay_ms = |ms| {
-        std::thread::sleep(Duration::from_millis(ms as u64));
-    };
-    let seed = 4;
-    let mut game = Game::new(get_button_1, get_button_2, set_led, delay_ms, display_and_window, seed)?;
-    game.run_game()?;
-
-
-    // Window::new("Hello World", &output_settings).show_static(&display);
-    // let line_style = PrimitiveStyle::with_stroke(BinaryColor::On, 1);
-    // let text_style = MonoTextStyle::new(&FONT_6X10, BinaryColor::On);
-    // Circle::new(Point::new(72, 8), 48)
-    //     .into_styled(line_style)
-    //     .draw(&mut display)?;
-    //
-    // Line::new(Point::new(48, 16), Point::new(8, 16))
-    //     .into_styled(line_style)
-    //     .draw(&mut display)?;
-    //
-    // Line::new(Point::new(48, 16), Point::new(64, 32))
-    //     .into_styled(line_style)
-    //     .draw(&mut display)?;
-    //
-    // Rectangle::new(Point::new(79, 15), Size::new(34, 34))
-    //     .into_styled(line_style)
-    //     .draw(&mut display)?;
-    //
-    // Text::new("Hello World!", Point::new(5, 5), text_style).draw(&mut display)?;
-
-    Ok(())
-}
-
-struct DisplayAndWindow {
-    display: SimulatorDisplay<BinaryColor>,
-    window: Window,
-}
-
-impl DrawTarget for DisplayAndWindow {
-    type Color = BinaryColor;
-    type Error = <SimulatorDisplay<BinaryColor> as DrawTarget>::Error;
-
-    fn draw_iter<I>(&mut self, pixels: I) -> Result<(), Self::Error>
-    where
-        I: IntoIterator<Item=Pixel<Self::Color>>
-    {
-        self.display.draw_iter(pixels)
-    }
-
-    fn fill_contiguous<I>(&mut self, area: &Rectangle, colors: I) -> Result<(), Self::Error>
-    where
-        I: IntoIterator<Item=Self::Color>
-    {
-        self.display.fill_contiguous(area, colors)
-    }
-
-    fn fill_solid(&mut self, area: &Rectangle, color: Self::Color) -> Result<(), Self::Error> {
-        self.display.fill_solid(area, color)
-    }
-
-    fn clear(&mut self, color: Self::Color) -> Result<(), Self::Error> {
-        self.display.clear(color)
-    }
-}
-
-impl Dimensions for DisplayAndWindow {
-    fn bounding_box(&self) -> Rectangle {
-        self.display.bounding_box()
-    }
-}
-
-impl game::ValidDisplay for DisplayAndWindow {
-    fn flush(&mut self) -> Result<(), Error> {
-        self.window.update(&self.display);
+    if let Err(Error::Quit) = result {
         Ok(())
+    } else {
+        result
     }
 }
-impl crate::game::ValidDisplay for SimulatorDisplay<BinaryColor> {
-    fn flush(&mut self) -> Result<(), Error> {
-        let output_settings = OutputSettingsBuilder::new()
-            .theme(BinaryColorTheme::OledBlue)
-            .build();
-        Window::new("Hello World", &output_settings).update(&self);
+
+struct Device {
+    simulator_display: SimulatorDisplay<BinaryColor>,
+    window: Window,
+    has_updated: bool,
+    inputs: Inputs,
+}
+impl AbstractDevice for Device {
+    type Display = SimulatorDisplay<BinaryColor>;
+    type Error = Error;
+
+    fn get_inputs(&mut self) -> Result<Inputs, Error> {
+        if !self.has_updated {
+            self.has_updated = true;
+            self.window.update(&self.simulator_display);
+        }
+        for event in self.window.events() {
+            match event {
+                SimulatorEvent::KeyUp {
+                    keycode,
+                    keymod: _,
+                    repeat: _,
+                } => match keycode {
+                    Keycode::Z => {
+                        self.inputs.button1_down = false;
+                    }
+                    Keycode::X => {
+                        self.inputs.button2_down = false;
+                    }
+                    _ => (),
+                },
+                SimulatorEvent::KeyDown {
+                    keycode,
+                    keymod: _,
+                    repeat: _,
+                } => match keycode {
+                    Keycode::Z => {
+                        self.inputs.button1_down = true;
+                    }
+                    Keycode::X => {
+                        self.inputs.button2_down = true;
+                    }
+                    Keycode::Escape => {
+                        return Err(Error::Quit);
+                    }
+                    _ => (),
+                },
+                SimulatorEvent::Quit => {
+                    return Err(Error::Quit);
+                }
+                _ => {}
+            }
+        }
+        Ok(self.inputs)
+    }
+
+    fn set_led(&mut self, _new_state: bool) {}
+
+    fn delay_ms(&mut self, ms: u32) {
+        thread::sleep(Duration::from_millis(ms as u64))
+    }
+
+    fn get_rng_seed(&mut self) -> u64 {
+        4
+    }
+
+    fn display(&mut self) -> &mut Self::Display {
+        &mut self.simulator_display
+    }
+
+    fn flush_display(&mut self) -> Result<(), Error> {
+        self.window.update(&self.simulator_display);
+        self.has_updated = true;
         Ok(())
     }
 }

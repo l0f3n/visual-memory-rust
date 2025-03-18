@@ -11,8 +11,12 @@ pub enum Error {
     #[cfg(not(target_arch = "x86_64"))]
     Display(display_interface::DisplayError),
     #[cfg(target_arch = "x86_64")]
+    // Never instantiated, just exists for type system reasons
     Infallible,
+    // Format error
     Format,
+    // Exit out of the application
+    Quit,
 }
 #[cfg(not(target_arch = "x86_64"))]
 impl From<rp2040_hal::i2c::Error> for Error {

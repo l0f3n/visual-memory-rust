@@ -2,12 +2,13 @@ use crate::debouncing::{DebounceResult, Debouncer};
 use crate::error::Error;
 use core::mem::MaybeUninit;
 // use defmt::*;
+use crate::abstract_device::AbstractDevice;
 use embedded_graphics::draw_target::DrawTarget;
 use embedded_graphics::geometry::Point;
 use embedded_graphics::mono_font::ascii::*;
 use embedded_graphics::mono_font::{MonoTextStyle, MonoTextStyleBuilder};
 use embedded_graphics::pixelcolor::BinaryColor;
-use embedded_graphics::prelude::{Primitive, Size};
+use embedded_graphics::prelude::{Dimensions, Primitive, Size};
 use embedded_graphics::primitives::{PrimitiveStyle, Rectangle};
 use embedded_graphics::text::{Baseline, Text};
 use embedded_graphics::Drawable;
@@ -29,67 +30,33 @@ enum GameState {
     Failure,
     Score,
 }
-pub trait ValidDisplay: DrawTarget<Color = BinaryColor> {
-    fn flush(&mut self) -> Result<(), Error>;
-}
 
-pub struct Game<
-    'a,
-    FuncGetButton1: FnMut() -> bool,
-    FuncGetButton2: FnMut() -> bool,
-    FuncSetLed: FnMut(bool),
-    FuncDelayMs: FnMut(u32),
-    Display: ValidDisplay,
-> {
-    get_button_1: FuncGetButton1,
-    get_button_2: FuncGetButton2,
-    set_led: FuncSetLed,
-    delay_ms: FuncDelayMs,
-    display: Display,
+pub struct Game<'a, Device: AbstractDevice> {
+    device: Device,
     text_style: MonoTextStyle<'a, BinaryColor>,
     rng: fastrand::Rng,
     cursor: Point,
     screen_size: Size,
 }
 
-impl<
-        'a,
-        FuncGetButton1: FnMut() -> bool,
-        FuncGetButton2: FnMut() -> bool,
-        FuncSetLed: FnMut(bool),
-        FuncDelayMs: FnMut(u32),
-        Display: ValidDisplay,
-    > Game<'a, FuncGetButton1, FuncGetButton2, FuncSetLed, FuncDelayMs, Display>
-where
-    Error: From<<Display as DrawTarget>::Error>,
+impl<'a, Device: AbstractDevice> Game<'a, Device>
 {
-    pub fn new(
-        get_button_1: FuncGetButton1,
-        get_button_2: FuncGetButton2,
-        set_led: FuncSetLed,
-        delay_ms: FuncDelayMs,
-        display: Display,
-        seed: u64,
-    ) -> Result<Self, Error> {
-        let rng = fastrand::Rng::with_seed(seed);
+    pub fn new(mut device: Device) -> Result<Self, Device::Error> {
+        let rng = fastrand::Rng::with_seed(device.get_rng_seed());
         let text_style = MonoTextStyleBuilder::new()
             .font(&FONT_6X10)
             .text_color(BinaryColor::On)
             .build();
-        let screen_size = display.bounding_box().size;
+        let screen_size = device.display().bounding_box().size;
         Ok(Self {
-            get_button_1,
-            get_button_2,
-            set_led,
-            delay_ms,
-            display,
+            device,
             text_style,
             rng,
             cursor: Point::zero(),
             screen_size,
         })
     }
-    pub fn run_game(&mut self) -> Result<(), Error> {
+    pub fn run_game(&mut self) -> Result<(), Device::Error> {
         let mut debouncer_storage = [0x00u8; 2];
         let mut debounce = Debouncer::new(&mut debouncer_storage);
 
@@ -104,12 +71,13 @@ where
         let mut first = true;
 
         loop {
-            let button1_down = (self.get_button_1)();
-            let button2_down = (self.get_button_2)();
+            let inputs = self.device.get_inputs()?;
+            let button1_down = inputs.button1_down;
+            let button2_down = inputs.button2_down;
             let button1_fell = debounce.update(0, button1_down) == DebounceResult::Pressed;
             let button2_fell = debounce.update(1, button2_down) == DebounceResult::Pressed;
 
-            self.display.clear(BinaryColor::Off)?;
+            self.device.display().clear(BinaryColor::Off)?;
             self.reset_cursor();
 
             if last_game_state != game_state {
@@ -142,13 +110,14 @@ where
                     }
                     self.draw_string(": ")?;
                     self.draw_sequence(&sequence, sequence.len())?;
-                    (self.set_led)(true);
-                    self.display.flush()?;
-                    (self.set_led)(false);
+                    self.device.set_led(true);
+                    self.device.flush_display()?;
+                    self.device.set_led(false);
                     if sequence.len() > 6 {
-                        (self.delay_ms)(2000 + 200 * (sequence.len() as u32 - 6));
+                        self.device
+                            .delay_ms(2000 + 200 * (sequence.len() as u32 - 6));
                     } else {
-                        (self.delay_ms)(2000);
+                        self.device.delay_ms(2000);
                     }
                     game_state = GameState::Inputting;
                     if first {
@@ -176,12 +145,7 @@ where
                     }
                 }
                 GameState::Next => {
-                    if first {
-                        self.display_temporary_message("Good!", 1000)?;
-                        self.display_temporary_message("Next sequence:", 1000)?;
-                    } else {
-                        self.display_temporary_message("Good! Next:", 400)?;
-                    }
+                    self.display_temporary_message("Good! Next:", 400)?;
                     next_guess_index = 0;
                     highest_cleared = sequence.len();
                     game_state = GameState::Displaying;
@@ -192,10 +156,10 @@ where
                     self.display_temporary_message("No!", 200)?;
                     self.draw_string(": ")?;
                     self.draw_sequence(&sequence, sequence.len())?;
-                    (self.set_led)(true);
-                    self.display.flush()?;
-                    (self.set_led)(false);
-                    (self.delay_ms)(2000);
+                    self.device.set_led(true);
+                    self.device.flush_display()?;
+                    self.device.set_led(false);
+                    self.device.delay_ms(2000);
                     game_state = GameState::Score;
                 }
                 GameState::Score => {
@@ -211,9 +175,10 @@ where
                     }
                 }
             }
-            (self.set_led)(true);
-            self.display.flush()?;
-            (self.set_led)(false);
+            // self.device.delay_ms(10);
+            self.device.set_led(true);
+            self.device.flush_display()?;
+            self.device.set_led(false);
         }
     }
 
@@ -233,9 +198,9 @@ where
     fn reset_cursor(&mut self) {
         self.cursor = Point::zero();
     }
-    fn draw_string(&mut self, string: &str) -> Result<(), Error> {
+    fn draw_string(&mut self, string: &str) -> Result<(), Device::Error> {
         let next_point = Text::with_baseline(string, self.cursor, self.text_style, Baseline::Top)
-            .draw(&mut self.display)?;
+            .draw(self.device.display())?;
         self.cursor = next_point;
         Ok(())
     }
@@ -244,7 +209,7 @@ where
         &mut self,
         sequence: &FixedSliceVec<bool>,
         subset_length: usize,
-    ) -> Result<(), Error> {
+    ) -> Result<(), Device::Error> {
         for i in 0..subset_length {
             let value = sequence[i];
             if i % 3 == 0 {
@@ -256,7 +221,7 @@ where
         Ok(())
     }
 
-    fn _draw_string_wrapping(&mut self, string: &str) -> Result<(), Error> {
+    fn _draw_string_wrapping(&mut self, string: &str) -> Result<(), Device::Error> {
         if self.cursor.x as u32 > self.screen_size.width - (FONT_WIDTH * string.len() as u32) {
             self.cursor.x = 0;
             self.cursor.y += FONT_HEIGHT as i32;
@@ -265,7 +230,7 @@ where
         Ok(())
     }
 
-    fn draw_block_wrapping(&mut self, value: bool) -> Result<(), Error> {
+    fn draw_block_wrapping(&mut self, value: bool) -> Result<(), Device::Error> {
         if self.cursor.x as u32 > self.screen_size.width - FONT_WIDTH {
             self.cursor.x = 0;
             self.cursor.y += FONT_HEIGHT as i32;
@@ -283,25 +248,25 @@ where
         };
         block
             .into_styled(PrimitiveStyle::with_fill(BinaryColor::On))
-            .draw(&mut self.display)?;
+            .draw(self.device.display())?;
         self.cursor.x += FONT_WIDTH as i32 + BLOCK_SPACE as i32;
         Ok(())
     }
 
-    fn display_temporary_message(&mut self, string: &str, ms: u32) -> Result<(), Error> {
-        self.display.clear(BinaryColor::Off)?;
+    fn display_temporary_message(&mut self, string: &str, ms: u32) -> Result<(), Device::Error> {
+        self.device.display().clear(BinaryColor::Off)?;
         self.reset_cursor();
         self.draw_string(string)?;
-        (self.set_led)(true);
-        self.display.flush()?;
-        (self.set_led)(false);
-        (self.delay_ms)(ms);
-        self.display.clear(BinaryColor::Off)?;
+        self.device.set_led(true);
+        self.device.flush_display()?;
+        self.device.set_led(false);
+        self.device.delay_ms(ms);
+        self.device.display().clear(BinaryColor::Off)?;
         self.reset_cursor();
         Ok(())
     }
 
-    fn draw_float_string(&mut self, value: f32) -> Result<(), Error> {
+    fn draw_float_string(&mut self, value: f32) -> Result<(), Device::Error> {
         let mut buffer = [0x00u8; 12];
         let string = format_no_std::show(&mut buffer, format_args!("{:0.1}", value))?;
         self.draw_string(string)?;
