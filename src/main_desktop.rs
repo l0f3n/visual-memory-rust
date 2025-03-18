@@ -1,9 +1,11 @@
+#![cfg(target_arch = "x86_64")]
 use embedded_graphics_simulator::{BinaryColorTheme, OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window};
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics_simulator::sdl2::Keycode;
 use std::thread;
 use std::time::Duration;
 use embedded_graphics::geometry::Size;
+use rand::RngCore;
 use crate::abstract_device::{AbstractDevice, Inputs};
 use crate::error::Error;
 use crate::game::Game;
@@ -14,15 +16,17 @@ pub fn main_desktop() -> Result<(), Error> {
         .theme(BinaryColorTheme::OledBlue)
         .build();
     let window = Window::new("Hello World", &output_settings);
+    let seed = rand::rng().next_u64();
     let device = Device {
         simulator_display: display,
         window,
         has_updated: false,
         inputs: Inputs::default(),
+        seed,
     };
     let mut game = Game::new(device)?;
     let result = game.run_game();
-
+        
     if let Err(Error::Quit) = result {
         Ok(())
     } else {
@@ -35,6 +39,7 @@ struct Device {
     window: Window,
     has_updated: bool,
     inputs: Inputs,
+    seed: u64,
 }
 
 impl AbstractDevice for Device {
@@ -93,7 +98,7 @@ impl AbstractDevice for Device {
     }
 
     fn get_rng_seed(&mut self) -> u64 {
-        4
+        self.seed
     }
 
     fn display(&mut self) -> &mut Self::Display {

@@ -1,3 +1,4 @@
+#[cfg(target_arch = "x86_64")]
 use std::convert::Infallible;
 #[cfg(not(target_arch = "x86_64"))]
 use defmt::Format;
@@ -5,16 +6,19 @@ use defmt::Format;
 #[cfg_attr(not(target_arch = "x86_64"), derive(Format))]
 #[cfg_attr(target_arch = "x86_64", derive(Debug))]
 pub enum Error {
+    // Error on the I2C bus
     #[cfg(target_arch = "arm")]
     I2c(rp2040_hal::i2c::Error),
+    // Error inside the display transport layer
     #[cfg(not(target_arch = "x86_64"))]
     Display(display_interface::DisplayError),
-    #[cfg(target_arch = "x86_64")]
     // Never instantiated, just exists for type system reasons
+    #[cfg(target_arch = "x86_64")]
     Infallible,
     // Format error
     Format,
     // Exit out of the application
+    #[cfg(target_arch = "x86_64")]
     Quit,
 }
 #[cfg(not(target_arch = "x86_64"))]
@@ -31,14 +35,16 @@ impl From<display_interface::DisplayError> for Error {
     }
 }
 
-impl From<core::fmt::Error> for Error {
-    fn from(_value: core::fmt::Error) -> Self {
-        Self::Format
-    }
-}
+#[cfg(target_arch = "x86_64")]
 impl From<Infallible> for Error {
     fn from(_value: Infallible) -> Self {
         Self::Infallible
+    }
+}
+
+impl From<core::fmt::Error> for Error {
+    fn from(_value: core::fmt::Error) -> Self {
+        Self::Format
     }
 }
 

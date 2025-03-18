@@ -19,8 +19,6 @@ use panic_probe as _;
 #[cfg(not(target_arch = "x86_64"))]
 use rp_pico as bsp;
 
-use crate::error::Error;
-
 #[cfg(target_arch = "arm")]
 #[entry]
 #[allow(unreachable_code)]
@@ -32,6 +30,9 @@ fn main() -> ! {
     info!("End");
     loop {}
 }
+
+#[cfg(target_arch = "x86_64")]
+use crate::error::Error;
 
 #[cfg(target_arch = "x86_64")]
 fn main() -> Result<(), Error> {

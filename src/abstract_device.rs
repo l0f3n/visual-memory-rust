@@ -6,9 +6,8 @@ pub struct Inputs {
     pub button1_down: bool,
     pub button2_down: bool,
 }
-
-impl Inputs {
-    pub(crate) fn default() -> Inputs {
+impl Default for Inputs {
+    fn default() -> Self {
         Inputs {
             button1_down: false,
             button2_down: false,

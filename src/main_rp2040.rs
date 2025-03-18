@@ -1,5 +1,7 @@
 #![cfg(target_arch = "arm")]
+use crate::abstract_device::{AbstractDevice, Inputs};
 use core::cell::RefCell;
+use cortex_m::delay::Delay;
 use defmt::*;
 use defmt_rtt as _;
 use embedded_hal::digital::{InputPin, OutputPin};
@@ -11,6 +13,7 @@ use panic_probe as _;
 use rp_pico as bsp;
 // use sparkfun_pro_micro_rp2040 as bsp;
 
+use crate::error::Error;
 use bsp::hal::{
     clocks::{init_clocks_and_plls, Clock},
     pac,
@@ -22,14 +25,11 @@ use rp2040_hal::{
     adc::AdcPin,
     fugit::RateExtU32,
     uart::{DataBits, StopBits, UartConfig, UartPeripheral},
-    Adc,
-    I2C,
+    Adc, I2C,
 };
 use ssd1306::mode::{BufferedGraphicsMode, DisplayConfig};
 use ssd1306::prelude::{DisplayRotation, DisplaySize128x32, I2CInterface};
 use ssd1306::Ssd1306;
-use crate::error::Error;
-use crate::game::ValidDisplay;
 
 pub fn main_rp2040() -> ! {
     let mut pac = pac::Peripherals::take().unwrap();
@@ -48,8 +48,8 @@ pub fn main_rp2040() -> ! {
         &mut pac.RESETS,
         &mut watchdog,
     )
-        .ok()
-        .unwrap();
+    .ok()
+    .unwrap();
 
     let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
 
@@ -70,21 +70,11 @@ pub fn main_rp2040() -> ! {
     uart.write_full_blocking(b"Hello World!\r\n");
 
     let mut led_pin = pins.led.into_push_pull_output();
-    let mut button1_pin = pins.gpio7.into_pull_up_input();
-    let mut button2_pin = pins.gpio8.into_pull_up_input();
+    let button1_pin = pins.gpio7.into_pull_up_input();
+    let button2_pin = pins.gpio8.into_pull_up_input();
     let mut adc = Adc::new(pac.ADC, &mut pac.RESETS);
     let mut adc_pin_0 = AdcPin::new(pins.gpio28.into_floating_input()).unwrap();
     let seed: u16 = adc.read(&mut adc_pin_0).unwrap();
-
-    // use embedded_hal_0_2::adc::OneShot;
-    // use rp2040_hal::{adc::Adc, adc::AdcPin, gpio::Pins, pac, Sio};
-    // let mut peripherals = pac::Peripherals::take().unwrap();
-    // let sio = Sio::new(peripherals.SIO);
-    // let pins = Pins::new(peripherals.IO_BANK0, peripherals.PADS_BANK0, sio.gpio_bank0, &mut peripherals.RESETS);
-    // Enable adc
-    // Configure one of the pins as an ADC input
-    // Read the ADC counts from the ADC channel
-    // pins(&mut led_pin, &mut button1_pin);
 
     let result = (|| -> Result<(), Error> {
         let i2c = I2C::i2c0(
@@ -101,25 +91,16 @@ pub fn main_rp2040() -> ! {
         let mut display = Ssd1306::new(interface, DisplaySize128x32, DisplayRotation::Rotate0)
             .into_buffered_graphics_mode();
         display.init()?;
-
-        // let mut game = game::Game::new(button1_pin, button2_pin, &mut led_pin, &mut delay, display, seed as u64)?;
-        let get_button_1 = || {
-            button1_pin.is_low().unwrap()
+        
+        let device = Device {
+            display_storage: display,
+            button1_pin,
+            button2_pin,
+            led_pin: &mut led_pin,
+            delay: &mut delay,
+            seed,
         };
-        let get_button_2 = || {
-            button2_pin.is_low().unwrap()
-        };
-        let set_led = |value: bool| {
-            if value {
-                led_pin.set_high().unwrap();
-            } else {
-                led_pin.set_low().unwrap();
-            }
-        };
-        let delay_ms = |ms: u32| {
-            delay.delay_ms(ms);
-        };
-        let mut game = crate::game::Game::new(get_button_1, get_button_2, set_led, delay_ms, display, seed as u64)?;
+        let mut game = crate::game::Game::new(device)?;
         game.run_game()?;
         Ok(())
     })();
@@ -135,13 +116,49 @@ pub fn main_rp2040() -> ! {
     loop {}
 }
 
-impl<I2C> ValidDisplay
-for Ssd1306<I2CInterface<I2C>, DisplaySize128x32, BufferedGraphicsMode<DisplaySize128x32>>
+struct Device<'a, I2C, Button1Pin, Button2Pin, LedPin> {
+    display_storage:
+        Ssd1306<I2CInterface<I2C>, DisplaySize128x32, BufferedGraphicsMode<DisplaySize128x32>>,
+    button1_pin: Button1Pin,
+    button2_pin: Button2Pin,
+    led_pin: &'a mut LedPin,
+    delay: &'a mut Delay,
+    seed: u16,
+}
+
+impl<'a, I2C, Button1Pin: InputPin, Button2Pin: InputPin, LedPin: OutputPin> AbstractDevice
+    for Device<'a, I2C, Button1Pin, Button2Pin, LedPin>
 where
     I2C: embedded_hal::i2c::I2c,
 {
-    fn flush(&mut self) -> Result<(), Error> {
-        Ssd1306::flush(self)?;
+    type Display =
+        Ssd1306<I2CInterface<I2C>, DisplaySize128x32, BufferedGraphicsMode<DisplaySize128x32>>;
+    type Error = Error;
+    fn get_inputs(&mut self) -> Result<Inputs, Self::Error> {
+        Ok(Inputs {
+            button1_down: self.button1_pin.is_low().unwrap(),
+            button2_down: self.button2_pin.is_low().unwrap(),
+        })
+    }
+    fn set_led(&mut self, new_state: bool) {
+        if new_state {
+            self.led_pin.set_high().unwrap();
+        } else {
+            self.led_pin.set_low().unwrap();
+        }
+    }
+    fn delay_ms(&mut self, ms: u32) {
+        self.delay.delay_ms(ms);
+    }
+    fn get_rng_seed(&mut self) -> u64 {
+        self.seed as u64
+    }
+
+    fn display(&mut self) -> &mut Self::Display {
+        &mut self.display_storage
+    }
+    fn flush_display(&mut self) -> Result<(), Self::Error> {
+        self.display_storage.flush()?;
         Ok(())
     }
 }
