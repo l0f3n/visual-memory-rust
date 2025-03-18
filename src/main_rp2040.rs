@@ -1,4 +1,5 @@
 #![cfg(target_arch = "arm")]
+use embedded_hal_bus::i2c::RefCellDevice;
 use crate::abstract_device::{AbstractDevice, Inputs};
 use core::cell::RefCell;
 use cortex_m::delay::Delay;
@@ -86,12 +87,11 @@ pub fn main_rp2040() -> ! {
             125_000_000.Hz(),
         );
         let i2c_ref_cell = RefCell::new(i2c);
-        let i2c = embedded_hal_bus::i2c::RefCellDevice::new(&i2c_ref_cell);
-        let interface = ssd1306::I2CDisplayInterface::new(i2c);
+        let interface = ssd1306::I2CDisplayInterface::new(RefCellDevice::new(&i2c_ref_cell));
         let mut display = Ssd1306::new(interface, DisplaySize128x32, DisplayRotation::Rotate0)
             .into_buffered_graphics_mode();
         display.init()?;
-        
+
         let device = Device {
             display_storage: display,
             button1_pin,
