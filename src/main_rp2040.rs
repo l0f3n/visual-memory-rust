@@ -1,16 +1,4 @@
-// use rp2040_hal::{pac, Adc, Clock, Sio, Watchdog, I2C};
-// use rp2040_hal::clocks::init_clocks_and_plls;
-// use rp2040_hal::uart::{DataBits, StopBits, UartConfig, UartPeripheral};
-// use rp2040_hal::adc::AdcPin;
-// use core::cell::RefCell;
-// use ssd1306::Ssd1306;
-// use ssd1306::prelude::{DisplayRotation, DisplaySize128x32, I2CInterface};
-// use ssd1306::mode::{BufferedGraphicsMode, DisplayConfig};
-// use embedded_hal::digital::{InputPin, OutputPin};
-// use crate::{error, game};
-// use crate::error::Error;
-// use crate::game::ValidDisplay;
-
+#![cfg(target_arch = "arm")]
 use core::cell::RefCell;
 use defmt::*;
 use defmt_rtt as _;

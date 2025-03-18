@@ -1,7 +1,7 @@
 use crate::debouncing::{DebounceResult, Debouncer};
 use crate::error::Error;
 use core::mem::MaybeUninit;
-use defmt::*;
+// use defmt::*;
 use embedded_graphics::draw_target::DrawTarget;
 use embedded_graphics::geometry::Point;
 use embedded_graphics::mono_font::ascii::*;
@@ -19,7 +19,8 @@ const BLOCK_GROUPING_EXTRA_SPACING: u32 = 2;
 const BLOCK_LINE_HEIGHT: u32 = 2;
 const BLOCK_SPACE: u32 = 2;
 
-#[derive(Format, PartialEq, Clone, Copy)]
+// #[derive(Format, PartialEq, Clone, Copy)]
+#[derive(PartialEq, Clone, Copy)]
 enum GameState {
     Menu,
     Displaying,
@@ -113,7 +114,7 @@ where
 
             if last_game_state != game_state {
                 last_game_state = game_state;
-                info!("New state: {}", game_state);
+                // info!("New state: {}", game_state);
             }
             match game_state {
                 GameState::Menu => {
