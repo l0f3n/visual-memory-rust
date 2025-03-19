@@ -1,10 +1,12 @@
 [workspace]
 resolver = "2"
 members = [
+    "raspberry-pi-pico",
     "arduino-nano",
     "desktop",
     "program",
-    "raspberry-pi-pico",
+
+    "arduino-nano-minimized",
 ]
 default-members = [
     "raspberry-pi-pico"

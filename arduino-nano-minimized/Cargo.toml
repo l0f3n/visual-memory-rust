@@ -1,6 +1,6 @@
 [package]
 edition = "2021"
-name = "arduino-nano"
+name = "arduino-nano-minimized"
 version = "0.1.0"
 license = "MIT OR Apache-2.0"
 
@@ -8,9 +8,10 @@ license = "MIT OR Apache-2.0"
 [dependencies]
 embedded-graphics = "0.8.1"
 fixed-slice-vec = "0.10.0"
-format_no_std = "1.2.0"
 fastrand = { version = "2.3.0", default-features = false }
+ufmt = "0.2.0"
 #bmi160 = "1.1.0"
+embedded-hal-bus = "0.2.0"
 
 embedded-hal = { version = "1.0.0" }
 ssd1306 = "0.9.0"

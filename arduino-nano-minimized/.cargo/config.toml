@@ -1,3 +1,4 @@
+[target.'cfg(target_arch = "avr")']
 runner = "ravedude nano -cb 115200 -P COM3"
 #runner = "avrdude -c arduino -p m328p -P COM3 -b 115200 -U flash:w:\"C:\\Users\\Gabriel\\Workspace\\Lödöl\\rust-x-arduino\\target\\avr-atmega328p\\debug\\rust-x-arduino.hex\":a #"
 

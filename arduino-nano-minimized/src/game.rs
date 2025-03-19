@@ -142,6 +142,12 @@ impl<'a, Device: AbstractDevice> Game<'a, Device>
                     if next_guess_index == sequence.len() {
                         game_state = GameState::Next;
                     }
+                    loop {
+                        self.device.set_led(true);
+                        arduino_hal::delay_ms(500);
+                        self.device.set_led(false);
+                        arduino_hal::delay_ms(500);
+                    }
                 }
                 GameState::Next => {
                     self.display_temporary_message("Good! Next:", 400)?;
@@ -178,6 +184,7 @@ impl<'a, Device: AbstractDevice> Game<'a, Device>
             self.device.set_led(true);
             self.device.flush_display()?;
             self.device.set_led(false);
+
         }
     }
 
@@ -266,9 +273,8 @@ impl<'a, Device: AbstractDevice> Game<'a, Device>
     }
 
     fn draw_float_string(&mut self, value: f32) -> Result<(), Device::Error> {
-        let mut buffer = [0x00u8; 12];
-        let string = format_no_std::show(&mut buffer, format_args!("{:0.1}", value))?;
-        self.draw_string(string)?;
+        // let mut buffer = [0x00u8; 12];
+        self.draw_string("0.0")?;
         Ok(())
     }
 }
