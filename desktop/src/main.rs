@@ -1,7 +1,4 @@
-mod abstract_device;
-mod debouncing;
 mod error;
-mod game;
 use embedded_graphics_simulator::{BinaryColorTheme, OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window};
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics_simulator::sdl2::Keycode;
@@ -9,9 +6,9 @@ use std::thread;
 use std::time::Duration;
 use embedded_graphics::geometry::Size;
 use rand::RngCore;
-use crate::abstract_device::{AbstractDevice, Inputs};
+use program::abstract_device::{AbstractDevice, Inputs};
 use crate::error::Error;
-use crate::game::Game;
+use program::game::Game;
 
 
 fn main() -> Result<(), Error> {

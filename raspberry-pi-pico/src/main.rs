@@ -2,7 +2,7 @@
 #![no_main]
 #![cfg(target_arch = "arm")]
 use embedded_hal_bus::i2c::RefCellDevice;
-use crate::abstract_device::{AbstractDevice, Inputs};
+use program::abstract_device::{AbstractDevice, Inputs};
 use core::cell::RefCell;
 use cortex_m::delay::Delay;
 use defmt::*;
@@ -35,13 +35,7 @@ use ssd1306::mode::{BufferedGraphicsMode, DisplayConfig};
 use ssd1306::prelude::{DisplayRotation, DisplaySize128x32, I2CInterface};
 use ssd1306::Ssd1306;
 
-
-
-mod abstract_device;
-mod debouncing;
 mod error;
-mod game;
-
 
 #[entry]
 #[allow(unreachable_code)]
@@ -114,7 +108,7 @@ fn main() -> ! {
             delay: &mut delay,
             seed,
         };
-        let mut game = crate::game::Game::new(device)?;
+        let mut game = program::game::Game::new(device)?;
         game.run_game()?;
         Ok(())
     })();

@@ -16,3 +16,4 @@ fastrand = { version = "2.3.0", default-features = false }
 [target.'cfg(target_arch = "x86_64")'.dependencies]
 embedded-graphics-simulator = "0.7.0"
 rand = "0.9.0"
+program = { path = "../program" }
