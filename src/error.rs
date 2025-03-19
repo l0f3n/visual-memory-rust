@@ -1,9 +1,9 @@
 #[cfg(target_arch = "x86_64")]
 use std::convert::Infallible;
-#[cfg(not(target_arch = "x86_64"))]
+#[cfg(target_arch = "arm")]
 use defmt::Format;
 
-#[cfg_attr(not(target_arch = "x86_64"), derive(Format))]
+#[cfg_attr(target_arch = "arm", derive(Format))]
 #[cfg_attr(target_arch = "x86_64", derive(Debug))]
 pub enum Error {
     // Error on the I2C bus
@@ -21,7 +21,7 @@ pub enum Error {
     #[cfg(target_arch = "x86_64")]
     Quit,
 }
-#[cfg(not(target_arch = "x86_64"))]
+#[cfg(target_arch = "arm")]
 impl From<rp2040_hal::i2c::Error> for Error {
     fn from(value: rp2040_hal::i2c::Error) -> Self {
         Self::I2c(value)
