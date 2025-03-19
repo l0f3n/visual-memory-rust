@@ -1,24 +1,3 @@
-[target.'cfg(all(target_arch = "arm", target_os = "none"))']
-# Choose a default "cargo run" tool (see README for more info)
-# - `probe-rs` provides flashing and defmt via a hardware debugger, and stack unwind on panic
-# - elf2uf2-rs loads firmware over USB when the rp2040 is in boot mode
-#runner = "probe-rs download --chip RP2040 --protocol swd"
-runner = "probe-rs run --chip RP2040 --protocol swd"
-#runner = "elf2uf2-rs -d"
-
-rustflags = [
-  "-C", "linker=flip-link",
-  "-C", "link-arg=--nmagic",
-  "-C", "link-arg=-Tlink.x",
-  "-C", "link-arg=-Tdefmt.x",
-
-  # Code-size optimizations.
-  #   trap unreachable can save a lot of space, but requires nightly compiler.
-  #   uncomment the next line if you wish to enable it
-  # "-Z", "trap-unreachable=no",
-  "-C", "no-vectorize-loops",
-]
-[target.'cfg(target_arch = "avr")']
 runner = "ravedude nano -cb 115200 -P COM3"
 #runner = "avrdude -c arduino -p m328p -P COM3 -b 115200 -U flash:w:\"C:\\Users\\Gabriel\\Workspace\\Lödöl\\rust-x-arduino\\target\\avr-atmega328p\\debug\\rust-x-arduino.hex\":a #"
 
@@ -26,19 +5,52 @@ runner = "ravedude nano -cb 115200 -P COM3"
 build-std = ["core"]
 
 [build]
-#target = "thumbv6m-none-eabi"
-#target = "x86_64-pc-windows-gnu"
 target = "avr-specs/avr-atmega328p.json"
 
-[env]
-DEFMT_LOG = "debug"
+# AVR
+[profile.dev]
+panic = "abort"
+lto = true
+opt-level = "s"
 
-#[build]
-#target = "avr-atmega328p.json"
-#
-#[target.'cfg(target_arch = "avr")']
-#runner = "ravedude nano-new -cb 115200 -P COM3"
-##runner = "avrdude -c arduino -p m328p -P COM3 -b 115200 -U flash:w:\"C:\\Users\\Gabriel\\Workspace\\Lödöl\\rust-x-arduino\\target\\avr-atmega328p\\debug\\rust-x-arduino.hex\":a #"
-#
-#[unstable]
-#build-std = ["core"]
+[profile.release]
+panic = "abort"
+codegen-units = 1
+#debug = true
+lto = true
+strip = true
+opt-level = "z"
+
+# do not optimize proc-macro crates = faster builds from scratch
+[profile.dev.build-override]
+codegen-units = 8
+debug = false
+debug-assertions = false
+opt-level = 0
+overflow-checks = false
+
+[profile.release.build-override]
+codegen-units = 8
+debug = false
+debug-assertions = false
+opt-level = 0
+overflow-checks = false
+
+# cargo test
+[profile.test]
+codegen-units = 1
+debug = 2
+debug-assertions = true
+incremental = false
+opt-level = 3
+overflow-checks = true
+
+# cargo test --release
+[profile.bench]
+codegen-units = 1
+debug = 2
+debug-assertions = false
+incremental = false
+lto = 'fat'
+opt-level = 3
+

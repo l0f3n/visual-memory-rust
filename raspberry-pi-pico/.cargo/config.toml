@@ -18,27 +18,10 @@ rustflags = [
   # "-Z", "trap-unreachable=no",
   "-C", "no-vectorize-loops",
 ]
-[target.'cfg(target_arch = "avr")']
-runner = "ravedude nano -cb 115200 -P COM3"
-#runner = "avrdude -c arduino -p m328p -P COM3 -b 115200 -U flash:w:\"C:\\Users\\Gabriel\\Workspace\\Lödöl\\rust-x-arduino\\target\\avr-atmega328p\\debug\\rust-x-arduino.hex\":a #"
-
-[unstable]
-build-std = ["core"]
 
 [build]
-#target = "thumbv6m-none-eabi"
-#target = "x86_64-pc-windows-gnu"
-target = "avr-specs/avr-atmega328p.json"
+target = "thumbv6m-none-eabi"
 
 [env]
 DEFMT_LOG = "debug"
 
-#[build]
-#target = "avr-atmega328p.json"
-#
-#[target.'cfg(target_arch = "avr")']
-#runner = "ravedude nano-new -cb 115200 -P COM3"
-##runner = "avrdude -c arduino -p m328p -P COM3 -b 115200 -U flash:w:\"C:\\Users\\Gabriel\\Workspace\\Lödöl\\rust-x-arduino\\target\\avr-atmega328p\\debug\\rust-x-arduino.hex\":a #"
-#
-#[unstable]
-#build-std = ["core"]
