@@ -1,0 +1,148 @@
+[package]
+edition = "2021"
+name = "visual-memory-rust"
+version = "0.1.0"
+license = "MIT OR Apache-2.0"
+
+# All platforms
+[dependencies]
+embedded-graphics = "0.8.1"
+fixed-slice-vec = "0.10.0"
+format_no_std = "1.2.0"
+fastrand = { version = "2.3.0", default-features = false }
+#bmi160 = "1.1.0"
+
+# All embedded platforms
+#[target.'cfg(not(target_arch = "x86_64"))'.dependencies]
+embedded-hal = { version = "1.0.0" }
+#portable-atomic = { version = "1.11.0", features = ["critical-section"] }
+ssd1306 = "0.9.0"
+display-interface = { version = "0.5.0", features = ["defmt-03"] }
+
+# Raspberry pi pico
+[target.'cfg(target_arch = "arm")'.dependencies]
+cortex-m = "0.7"
+cortex-m-rt = "0.7"
+panic-probe = { version = "0.3", features = ["print-defmt"] }
+defmt-rtt = "0.4"
+rp-pico = "0.9"
+rp2040-hal = { version = "0.10", features = ["rt", "critical-section-impl", "defmt"] }
+rp2040-boot2 = "0.3"
+defmt = "0.3"
+embedded-hal-bus = "0.2.0"
+
+# Ardino nano
+[target.'cfg(target_arch = "avr")'.dependencies]
+panic-halt = "0.2.0"
+arduino-hal = { git = "https://github.com/rahix/avr-hal", rev = "3c089795cadbbc7fa83f45958128689fee7ba1e4", features = ["arduino-nano"] }
+nostd = { version = "0.1.3", default-features = false }
+
+[target.'cfg(target_arch = "avr")'.build-dependencies]
+proc-macro2 = "=1.0.79"
+
+# Desktop
+[target.'cfg(target_arch = "x86_64")'.dependencies]
+embedded-graphics-simulator = "0.7.0"
+rand = "0.9.0"
+
+
+
+#[[bin]]
+#name = "visual-memory-rust"
+#test = false
+#bench = false
+#
+#[dependencies]
+#panic-halt = "0.2.0"
+#ufmt = "0.2.0"
+#nb = "1.1.0"
+#embedded-hal = "1.0"
+#nostd = { version = "0.1.3", default-features = false }
+#
+#[dependencies.arduino-hal]
+#git = "https://github.com/rahix/avr-hal"
+#rev = "3c089795cadbbc7fa83f45958128689fee7ba1e4"
+#features = ["arduino-nano"]
+
+# The latest releases of `proc-macro2` do not support the rust toolchain that
+# we use.  Thus, we must fix this dependency to an older version where our
+# toolchain is still supported.  See https://github.com/Rahix/avr-hal/issues/537
+#[build-dependencies.proc-macro2]
+#version = "=1.0.79"
+
+# AVR
+[profile.dev]
+panic = "abort"
+lto = true
+opt-level = "s"
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+#debug = true
+lto = true
+strip = true
+opt-level = "z"
+
+## RPI and Desktop
+## cargo build/run
+#[profile.dev]
+#codegen-units = 1
+#debug = 2
+#debug-assertions = true
+#incremental = false
+#opt-level = 3
+#overflow-checks = true
+#
+## cargo build/run --release
+#[profile.release]
+#codegen-units = 1
+#debug = 2
+#debug-assertions = false
+#incremental = false
+#lto = 'fat'
+#opt-level = 3
+#overflow-checks = false
+
+
+# do not optimize proc-macro crates = faster builds from scratch
+[profile.dev.build-override]
+codegen-units = 8
+debug = false
+debug-assertions = false
+opt-level = 0
+overflow-checks = false
+
+[profile.release.build-override]
+codegen-units = 8
+debug = false
+debug-assertions = false
+opt-level = 0
+overflow-checks = false
+
+# cargo test
+[profile.test]
+codegen-units = 1
+debug = 2
+debug-assertions = true
+incremental = false
+opt-level = 3
+overflow-checks = true
+
+# cargo test --release
+[profile.bench]
+codegen-units = 1
+debug = 2
+debug-assertions = false
+incremental = false
+lto = 'fat'
+opt-level = 3
+
+# Centrally,
+# https://github.com/rp-rs/rp2040-project-template
+# Change .cargo/config.toml to use runner = "elf2uf2-rs -d"
+# Additionally:
+# https://github.com/rp-rs/rp-hal#gettting_started
+
+# Haven't touched yet:
+# https://reltech.substack.com/p/getting-started-with-rust-on-a-raspberry
