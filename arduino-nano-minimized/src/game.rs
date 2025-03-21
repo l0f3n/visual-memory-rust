@@ -1,15 +1,16 @@
+use crate::abstract_device::AbstractDevice;
 use crate::debouncing::{DebounceResult, Debouncer};
 use core::mem::MaybeUninit;
-// use defmt::*;
-use crate::abstract_device::AbstractDevice;
 use embedded_graphics::draw_target::DrawTarget;
 use embedded_graphics::geometry::Point;
+use embedded_graphics::image::{ImageDrawable, ImageRaw, SubImage};
 use embedded_graphics::mono_font::ascii::*;
-use embedded_graphics::mono_font::{MonoTextStyle, MonoTextStyleBuilder};
+use embedded_graphics::mono_font::{MonoFont, MonoTextStyle, MonoTextStyleBuilder};
 use embedded_graphics::pixelcolor::BinaryColor;
-use embedded_graphics::prelude::{Dimensions, Primitive, Size};
+use embedded_graphics::prelude::{Dimensions, OriginDimensions, Primitive, Size, Transform};
 use embedded_graphics::primitives::{PrimitiveStyle, Rectangle};
-use embedded_graphics::text::{Baseline, Text};
+use embedded_graphics::text::renderer::TextRenderer;
+use embedded_graphics::text::{Alignment, Baseline, Text};
 use embedded_graphics::Drawable;
 use fixed_slice_vec::FixedSliceVec;
 
@@ -38,8 +39,7 @@ pub struct Game<'a, Device: AbstractDevice> {
     screen_size: Size,
 }
 
-impl<'a, Device: AbstractDevice> Game<'a, Device>
-{
+impl<'a, Device: AbstractDevice> Game<'a, Device> {
     pub fn new(mut device: Device) -> Result<Self, Device::Error> {
         let rng = fastrand::Rng::with_seed(device.get_rng_seed());
         let text_style = MonoTextStyleBuilder::new()
@@ -59,10 +59,14 @@ impl<'a, Device: AbstractDevice> Game<'a, Device>
         let mut debouncer_storage = [0x00u8; 2];
         let mut debounce = Debouncer::new(&mut debouncer_storage);
 
-        const MAX_SEQUENCE: usize = 128;
-        let mut sequence_storage = [MaybeUninit::new(false); MAX_SEQUENCE];
+        const MAX_SEQUENCE: usize = 4096;
+        // static BUFFER: [u8; 4096] = [0u8; 4096];
+        // for byte in BUFFER {
+        let mut sequence_storage: [MaybeUninit<bool>; MAX_SEQUENCE] =
+            [MaybeUninit::new(false); MAX_SEQUENCE];
         let mut sequence = FixedSliceVec::new(&mut sequence_storage[..]);
         sequence.clear();
+        self.device.display().clear(BinaryColor::Off)?;
         let mut game_state = GameState::Menu;
         let mut last_game_state = GameState::Score;
         let mut next_guess_index = 0;
@@ -142,12 +146,6 @@ impl<'a, Device: AbstractDevice> Game<'a, Device>
                     if next_guess_index == sequence.len() {
                         game_state = GameState::Next;
                     }
-                    loop {
-                        self.device.set_led(true);
-                        arduino_hal::delay_ms(500);
-                        self.device.set_led(false);
-                        arduino_hal::delay_ms(500);
-                    }
                 }
                 GameState::Next => {
                     self.display_temporary_message("Good! Next:", 400)?;
@@ -184,7 +182,12 @@ impl<'a, Device: AbstractDevice> Game<'a, Device>
             self.device.set_led(true);
             self.device.flush_display()?;
             self.device.set_led(false);
-
+            // loop {
+            //     self.device.set_led(true);
+            //     arduino_hal::delay_ms(200);
+            //     self.device.set_led(false);
+            //     arduino_hal::delay_ms(200);
+            // }
         }
     }
 
@@ -205,9 +208,54 @@ impl<'a, Device: AbstractDevice> Game<'a, Device>
         self.cursor = Point::zero();
     }
     fn draw_string(&mut self, string: &str) -> Result<(), Device::Error> {
-        let next_point = Text::with_baseline(string, self.cursor, self.text_style, Baseline::Top)
-            .draw(self.device.display())?;
-        self.cursor = next_point;
+        let text = Text::with_baseline(string, self.cursor, self.text_style, Baseline::Top);
+
+        let target = self.device.display();
+        let mut next_position = text.position;
+
+        let mut position = text.position;
+
+        for line in text.text.split('\n') {
+            let p = position;
+            position.y += text
+                .text_style
+                .line_height
+                .to_absolute(text.character_style.line_height()) as i32;
+
+            // remove trailing '\r' for '\r\n' line endings
+            let len = line.len();
+            let (line, p) = if len > 0 && line.as_bytes()[len - 1] == b'\r' {
+                (&line[0..len - 1], p)
+            } else {
+                (line, p)
+            };
+
+            let mut position = position - Point::new(0, 0);
+            let char_width = self.text_style.font.character_size.width as i32;
+            for next_char in line.chars() {
+                let p = position;
+                position.x += char_width;
+                // let glyph = self.text_style.font.glyph(next_char);
+                let glyph = Glyph::new(self.text_style.font, next_char);
+                embedded_graphics::image::Image::new(&glyph, p).draw(target)?;
+            }
+            next_position = position;
+
+            // let next = self.text_style.draw_string_binary(
+            //     text,
+            //     position,
+            //     MonoFontDrawTarget::new(target, Foreground(text_color)),
+            // )?;
+
+            // next_position = self.text_style.draw_string(
+            //     line,
+            //     position,
+            //     text.text_style.baseline,
+            //     target,
+            // )?;
+        }
+
+        self.cursor = next_position;
         Ok(())
     }
 
@@ -272,9 +320,95 @@ impl<'a, Device: AbstractDevice> Game<'a, Device>
         Ok(())
     }
 
-    fn draw_float_string(&mut self, value: f32) -> Result<(), Device::Error> {
+    fn draw_float_string(&mut self, _value: f32) -> Result<(), Device::Error> {
         // let mut buffer = [0x00u8; 12];
-        self.draw_string("0.0")?;
+        self.draw_string("X.X")?;
         Ok(())
+    }
+}
+
+struct Glyph<'a> {
+    parent: &'a ImageRaw<'a, BinaryColor>,
+    area: Rectangle,
+}
+
+impl<'a> Glyph<'a> {
+    pub fn new(font: &'a MonoFont<'a>, c: char) -> Self {
+        if font.character_size.width == 0 || font.image.size().width < font.character_size.width {
+            return Self::new_unchecked(&font.image, Rectangle::zero());
+        }
+
+        let glyphs_per_row = font.image.size().width / font.character_size.width;
+
+        // Char _code_ offset from first char, most often a space
+        // E.g. first char = ' ' (32), target char = '!' (33), offset = 33 - 32 = 1
+        let glyph_index = font.glyph_mapping.index(c) as u32;
+        let row = glyph_index / glyphs_per_row;
+
+        // Top left corner of character, in pixels
+        let char_x = (glyph_index - (row * glyphs_per_row)) * font.character_size.width;
+        let char_y = row * font.character_size.height;
+
+        Self::new_unchecked(
+            &font.image,
+            Rectangle::new(
+                Point::new(char_x as i32, char_y as i32),
+                font.character_size,
+            ),
+        )
+    }
+
+    // pub(super) fn new(parent: &'a T, area: &Rectangle) -> Self {
+    //     let area = parent.bounding_box().intersection(area);
+    //
+    //     Self { parent, area }
+    // }
+
+    pub(crate) const fn new_unchecked(parent: &'a ImageRaw<BinaryColor>, area: Rectangle) -> Self {
+        Self { parent, area }
+    }
+}
+
+impl<'a> OriginDimensions for Glyph<'a> {
+    fn size(&self) -> Size {
+        todo!()
+    }
+}
+
+// impl<'a> ImageDrawable for Glyph<'a> {
+//     type Color = BinaryColor;
+//
+//     fn draw<D>(&self, target: &mut D) -> Result<(), D::Error>
+//     where
+//         D: DrawTarget<Color=Self::Color>
+//     {
+//         todo!()
+//     }
+//
+//     fn draw_sub_image<D>(&self, target: &mut D, area: &Rectangle) -> Result<(), D::Error>
+//     where
+//         D: DrawTarget<Color=Self::Color>
+//     {
+//         todo!()
+//     }
+// }
+
+impl<'a> ImageDrawable for Glyph<'a> {
+    type Color = BinaryColor;
+
+    fn draw<DT>(&self, target: &mut DT) -> Result<(), DT::Error>
+    where
+        DT: DrawTarget<Color = Self::Color>,
+    {
+        self.parent.draw_sub_image(target, &self.area)
+    }
+
+    fn draw_sub_image<DT>(&self, target: &mut DT, area: &Rectangle) -> Result<(), DT::Error>
+    where
+        DT: DrawTarget<Color = Self::Color>,
+    {
+        let area = area.translate(self.area.top_left);
+
+        self.parent.draw_sub_image(target, &area)
     }
 }

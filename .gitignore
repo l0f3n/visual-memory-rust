@@ -13,3 +13,9 @@ target/
 !.vscode/extensions.json
 !.vscode/settings.json
 .idea
+
+# Files that are copied to workspace root during build step
+
+initialize_memory.S
+interrupt_vector.S
+linker-script

@@ -3,16 +3,17 @@
 
 mod error;
 
+use crate::error::Error;
 use core::cell::RefCell;
-use ssd1306::mode::BufferedGraphicsMode;
-use ssd1306::Ssd1306;
-use ssd1306::size::DisplaySize128x32;
+use display_interface::DisplayError;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_hal::i2c::I2c;
 use embedded_hal_bus::i2c::RefCellDevice;
-use ssd1306::prelude::{DisplayRotation, I2CInterface};
 use program::abstract_device::{AbstractDevice, Inputs};
-use crate::error::Error;
+use ssd1306::mode::{BufferedGraphicsMode, DisplayConfig};
+use ssd1306::prelude::{DisplayRotation, I2CInterface};
+use ssd1306::size::DisplaySize128x32;
+use ssd1306::Ssd1306;
 
 use panic_halt as _;
 
@@ -20,6 +21,10 @@ use panic_halt as _;
 fn main() -> ! {
     let dp = arduino_hal::Peripherals::take().unwrap();
     let pins = arduino_hal::pins!(dp);
+    // let display = adafruit_ssd1306::AdafruitSSD1306Driver::new(i2c);
+    let button1_pin = pins.d7.into_pull_up_input();
+    let button2_pin = pins.d8.into_pull_up_input();
+    let mut led_pin = pins.d13.into_output();
 
     // let mut serial = arduino_hal::default_serial!(dp, pins, 115200);
 
@@ -68,20 +73,23 @@ fn main() -> ! {
 }
 
 struct Device<I2C, Button1Pin, Button2Pin, LedPin> {
-    display_storage: Ssd1306<I2CInterface<I2C>, DisplaySize128x32, BufferedGraphicsMode<DisplaySize128x32>>,
+    display_storage:
+        Ssd1306<I2CInterface<I2C>, DisplaySize128x32, BufferedGraphicsMode<DisplaySize128x32>>,
     button1_pin: Button1Pin,
     button2_pin: Button2Pin,
     led_pin: LedPin,
     seed: u64,
 }
-impl<I2C, Button1Pin, Button2Pin, LedPin> AbstractDevice for Device<I2C, Button1Pin, Button2Pin, LedPin>
+impl<I2C, Button1Pin, Button2Pin, LedPin> AbstractDevice
+for Device<I2C, Button1Pin, Button2Pin, LedPin>
 where
     I2C: I2c,
     Button1Pin: InputPin,
     Button2Pin: InputPin,
     LedPin: OutputPin,
 {
-    type Display = Ssd1306<I2CInterface<I2C>, DisplaySize128x32, BufferedGraphicsMode<DisplaySize128x32>>;
+    type Display =
+    Ssd1306<I2CInterface<I2C>, DisplaySize128x32, BufferedGraphicsMode<DisplaySize128x32>>;
     type Error = Error;
 
     fn get_inputs(&mut self) -> Result<Inputs, Self::Error> {
@@ -117,50 +125,3 @@ where
         Ok(())
     }
 }
-// struct Device<'a, I2C, Button1Pin, Button2Pin, LedPin> {
-//     display_storage:
-//         Ssd1306<I2CInterface<I2C>, DisplaySize128x32, BufferedGraphicsMode<DisplaySize128x32>>,
-//     button1_pin: Button1Pin,
-//     button2_pin: Button2Pin,
-//     led_pin: &'a mut LedPin,
-//     delay: &'a mut Delay,
-//     seed: u16,
-// }
-
-// impl<'a, I2C, Button1Pin: InputPin, Button2Pin: InputPin, LedPin: OutputPin> AbstractDevice
-// for Device<'a, I2C, Button1Pin, Button2Pin, LedPin>
-// where
-//     I2C: embedded_hal::i2c::I2c,
-// {
-//     type Display =
-//     Ssd1306<I2CInterface<I2C>, DisplaySize128x32, BufferedGraphicsMode<DisplaySize128x32>>;
-//     type Error = Error;
-//     fn get_inputs(&mut self) -> Result<Inputs, Self::Error> {
-//         Ok(Inputs {
-//             button1_down: self.button1_pin.is_low().unwrap(),
-//             button2_down: self.button2_pin.is_low().unwrap(),
-//         })
-//     }
-//     fn set_led(&mut self, new_state: bool) {
-//         if new_state {
-//             self.led_pin.set_high().unwrap();
-//         } else {
-//             self.led_pin.set_low().unwrap();
-//         }
-//     }
-//     fn delay_ms(&mut self, ms: u32) {
-//         self.delay.delay_ms(ms);
-//     }
-//     fn get_rng_seed(&mut self) -> u64 {
-//         self.seed as u64
-//     }
-//
-//     fn display(&mut self) -> &mut Self::Display {
-//         &mut self.display_storage
-//     }
-//     fn flush_display(&mut self) -> Result<(), Self::Error> {
-//         self.display_storage.flush()?;
-//         Ok(())
-//     }
-// }
-//

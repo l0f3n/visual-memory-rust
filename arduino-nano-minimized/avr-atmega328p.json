@@ -1,11 +1,11 @@
 {
   "arch": "avr",
   "atomic-cas": false,
-  "cpu": "atmega1280",
+  "cpu": "atmega328p",
   "crt-objects-fallback": "false",
   "data-layout": "e-P1-p:16:8-i8:8-i16:8-i32:8-i64:8-f32:8-f64:8-n8-a:8",
   "eh-frame-header": false,
-  "exe-suffix": ".elf",
+  "exe-suffix": ".hex",
   "late-link-args": {
     "gnu-cc": [
       "-lgcc"
@@ -27,12 +27,17 @@
   "no-default-libraries": false,
   "pre-link-args": {
     "gnu-cc": [
-      "-mmcu=atmega1280",
+      "-mmcu=atmega328p",
       "-Wl,--as-needed,--print-memory-usage"
     ],
     "gnu-lld-cc": [
-      "-mmcu=atmega1280",
-      "-Wl,--as-needed,--print-memory-usage"
+      "-mmcu=atmega328p",
+      "-Wl,--as-needed,--print-memory-usage",
+      "-nostartfiles",
+      "-T",
+      "linker-script",
+      "interrupt_vector.S",
+      "initialize_memory.S"
     ]
   },
   "relocation-model": "static",
