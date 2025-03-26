@@ -5,6 +5,8 @@ mod abstract_device;
 mod debouncing;
 mod error;
 mod game;
+mod font_progmem;
+// mod print;
 
 use crate::abstract_device::{AbstractDevice, Inputs};
 use crate::error::Error;
@@ -29,8 +31,19 @@ fn main() -> ! {
     let button1_pin = pins.d5.into_pull_up_input();
     let button2_pin = pins.d4.into_pull_up_input();
     let mut led_pin = pins.d13.into_output();
+    // let mut serial = arduino_hal::default_serial!(dp, pins, 115200);
+    // print::put_console(serial);
+    // println!("Startup");
     // loop{
-    for i in 0..30 {
+    led_pin.set_high();
+    arduino_hal::delay_ms(100);
+    led_pin.set_low();
+    arduino_hal::delay_ms(100);
+    led_pin.set_high();
+    arduino_hal::delay_ms(100);
+    led_pin.set_low();
+    arduino_hal::delay_ms(500);
+    for _ in 0..10 {
         led_pin.set_high();
         arduino_hal::delay_ms(100);
         led_pin.set_low();
@@ -72,6 +85,7 @@ fn main() -> ! {
 
         // result.unwrap_infallible();
         // ufmt::uwrite!(&mut serial, "{}", type_name).unwrap_infallible();
+        // println!("Display init");
         let mut device = Device {
             display_storage: display,
             button1_pin,
@@ -79,7 +93,8 @@ fn main() -> ! {
             led_pin: &mut led_pin,
             seed: seed as u64,
         };
-        for i in 0..10 {
+        for _ in 0..4 {
+            // println!("Display flash");
             device.led_pin.set_high();
             device.display_storage.clear(BinaryColor::On)?;
             // device.display_storage.flush()?;
@@ -95,6 +110,7 @@ fn main() -> ! {
         //     device.led_pin.set_low();
         //     arduino_hal::delay_ms(200);
         // }
+        // println!("Start game");
         let mut game = crate::game::Game::new(device)?;
         game.run_game()?;
         Ok(())

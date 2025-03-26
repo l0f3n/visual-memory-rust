@@ -12,6 +12,8 @@ MEMORY {
 }
 
 SECTIONS {
+  /*__stacktop = ORIGIN(data) + LENGTH(data);
+  */
   .text : {
     /*
      * The interrupt vector routines *must* start at address 0x0000
@@ -25,12 +27,14 @@ SECTIONS {
     * (.text* .progmem.data*);
   } >text
 
+
   /* Data initialized to a value */
   .data : AT(ADDR(.text) + SIZEOF(.text)) {
     __data_start = .;
     * (.data* .rodata*);
     __data_end = .;
   } >data
+
 
   /* Data not initialized to a value */
   /* Even possible in Rust? */
@@ -42,7 +46,9 @@ SECTIONS {
     __bss_end = .;
   } >data
 
+
   /* Set up variables for initialization routines */
   __data_load_start = LOADADDR(.data);
   __data_load_end = __data_load_start + SIZEOF(.data);
+
 }

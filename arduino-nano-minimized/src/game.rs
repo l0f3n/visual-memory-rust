@@ -1,18 +1,21 @@
 use crate::abstract_device::AbstractDevice;
 use crate::debouncing::{DebounceResult, Debouncer};
 use core::mem::MaybeUninit;
+use avr_progmem::progmem;
 use embedded_graphics::draw_target::DrawTarget;
 use embedded_graphics::geometry::Point;
-use embedded_graphics::image::{ImageDrawable, ImageRaw, SubImage};
-use embedded_graphics::mono_font::ascii::*;
+use embedded_graphics::image::{ImageDrawable, ImageRaw};
 use embedded_graphics::mono_font::{MonoFont, MonoTextStyle, MonoTextStyleBuilder};
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::prelude::{Dimensions, OriginDimensions, Primitive, Size, Transform};
 use embedded_graphics::primitives::{PrimitiveStyle, Rectangle};
 use embedded_graphics::text::renderer::TextRenderer;
-use embedded_graphics::text::{Alignment, Baseline, Text};
+use embedded_graphics::text::{Baseline, Text};
 use embedded_graphics::Drawable;
+use embedded_graphics::mono_font::mapping::GlyphMapping;
 use fixed_slice_vec::FixedSliceVec;
+use crate::font_progmem::FONT_6X10;
+use avr_progmem::progmem_str as F;
 
 const FONT_WIDTH: u32 = 6;
 const FONT_HEIGHT: u32 = 10;
@@ -41,6 +44,12 @@ pub struct Game<'a, Device: AbstractDevice> {
 
 impl<'a, Device: AbstractDevice> Game<'a, Device> {
     pub fn new(mut device: Device) -> Result<Self, Device::Error> {
+        // for _ in 0..2 {
+        //     device.set_led(true);
+        //     device.delay_ms(400);
+        //     device.set_led(false);
+        //     device.delay_ms(400);
+        // }
         let rng = fastrand::Rng::with_seed(device.get_rng_seed());
         let text_style = MonoTextStyleBuilder::new()
             .font(&FONT_6X10)
@@ -90,7 +99,7 @@ impl<'a, Device: AbstractDevice> Game<'a, Device> {
             match game_state {
                 GameState::Menu => {
                     self.draw_string(
-                        "Sequence memory! Try\nbuttons. Push both\nbuttons to start.",
+                        F!("Sequence memory! Try\nbuttons. Push both\nbuttons to start."),
                     )?;
                     if button1_down && button2_down {
                         game_state = GameState::Displaying;
@@ -109,7 +118,7 @@ impl<'a, Device: AbstractDevice> Game<'a, Device> {
                 }
                 GameState::Displaying => {
                     if first {
-                        self.display_temporary_message("Remember!", 1000)?;
+                        self.display_temporary_message(F!("Remember!"), 1000)?;
                     }
                     self.draw_string(": ")?;
                     self.draw_sequence(&sequence, sequence.len())?;
@@ -124,7 +133,7 @@ impl<'a, Device: AbstractDevice> Game<'a, Device> {
                     }
                     game_state = GameState::Inputting;
                     if first {
-                        self.display_temporary_message("Repeat!", 1000)?;
+                        self.display_temporary_message(F!("Repeat!"), 1000)?;
                     }
                 }
                 GameState::Inputting => {
@@ -148,7 +157,7 @@ impl<'a, Device: AbstractDevice> Game<'a, Device> {
                     }
                 }
                 GameState::Next => {
-                    self.display_temporary_message("Good! Next:", 400)?;
+                    self.display_temporary_message(F!("Good! Next:"), 400)?;
                     next_guess_index = 0;
                     highest_cleared = sequence.len();
                     game_state = GameState::Displaying;
@@ -156,7 +165,7 @@ impl<'a, Device: AbstractDevice> Game<'a, Device> {
                     self.generate_sequence(sequence.len() + 1, &mut sequence);
                 }
                 GameState::Failure => {
-                    self.display_temporary_message("No!", 200)?;
+                    self.display_temporary_message(F!("No!"), 200)?;
                     self.draw_string(": ")?;
                     self.draw_sequence(&sequence, sequence.len())?;
                     self.device.set_led(true);
@@ -166,12 +175,12 @@ impl<'a, Device: AbstractDevice> Game<'a, Device> {
                     game_state = GameState::Score;
                 }
                 GameState::Score => {
-                    self.draw_string("You cleared ")?;
+                    self.draw_string(F!("You cleared "))?;
                     let score =
                         highest_cleared as f32 + next_guess_index as f32 / sequence.len() as f32;
                     self.draw_float_string(score)?;
                     self.cursor = Point::new(0, 10);
-                    self.draw_string("sequences!")?;
+                    self.draw_string(F!("sequences!"))?;
                     if button1_fell || button2_fell {
                         game_state = GameState::Menu;
                         sequence.clear();
@@ -320,9 +329,12 @@ impl<'a, Device: AbstractDevice> Game<'a, Device> {
         Ok(())
     }
 
-    fn draw_float_string(&mut self, _value: f32) -> Result<(), Device::Error> {
-        // let mut buffer = [0x00u8; 12];
-        self.draw_string("X.X")?;
+    fn draw_float_string(&mut self, value: f32) -> Result<(), Device::Error> {
+        let mut buffer = [0x00u8; 12];
+        let string = format_no_std::show(&mut buffer, format_args!("{:0.1}", value))?;
+        self.draw_string(string)?;
+        // // let mut buffer = [0x00u8; 12];
+        // self.draw_string("X.X")?;
         Ok(())
     }
 }
@@ -371,7 +383,7 @@ impl<'a> Glyph<'a> {
 
 impl<'a> OriginDimensions for Glyph<'a> {
     fn size(&self) -> Size {
-        todo!()
+        self.area.size
     }
 }
 

@@ -7,6 +7,7 @@ members = [
     "program",
 
     "arduino-nano-minimized",
+    "arduino-nano-minimized/font_to_array",
 ]
 default-members = [
     "raspberry-pi-pico"
