@@ -1,7 +1,6 @@
 use crate::abstract_device::AbstractDevice;
 use crate::debouncing::{DebounceResult, Debouncer};
 use core::mem::MaybeUninit;
-use avr_progmem::progmem;
 use embedded_graphics::draw_target::DrawTarget;
 use embedded_graphics::geometry::Point;
 use embedded_graphics::image::{ImageDrawable, ImageRaw};
@@ -14,8 +13,9 @@ use embedded_graphics::text::{Baseline, Text};
 use embedded_graphics::Drawable;
 use embedded_graphics::mono_font::mapping::GlyphMapping;
 use fixed_slice_vec::FixedSliceVec;
-use crate::font_progmem::FONT_6X10;
+use crate::font_progmem::{MonoFontProgmem, FONT_6X10};
 use avr_progmem::progmem_str as F;
+use crate::font_progmem;
 
 const FONT_WIDTH: u32 = 6;
 const FONT_HEIGHT: u32 = 10;
@@ -36,7 +36,8 @@ enum GameState {
 
 pub struct Game<'a, Device: AbstractDevice> {
     device: Device,
-    text_style: MonoTextStyle<'a, BinaryColor>,
+    // text_style: MonoTextStyle<'a, BinaryColor>,
+    font: &'a MonoFontProgmem<'a>,
     rng: fastrand::Rng,
     cursor: Point,
     screen_size: Size,
@@ -51,14 +52,11 @@ impl<'a, Device: AbstractDevice> Game<'a, Device> {
         //     device.delay_ms(400);
         // }
         let rng = fastrand::Rng::with_seed(device.get_rng_seed());
-        let text_style = MonoTextStyleBuilder::new()
-            .font(&FONT_6X10)
-            .text_color(BinaryColor::On)
-            .build();
         let screen_size = device.display().bounding_box().size;
+        let font = &FONT_6X10;
         Ok(Self {
             device,
-            text_style,
+            font,
             rng,
             cursor: Point::zero(),
             screen_size,
@@ -217,19 +215,21 @@ impl<'a, Device: AbstractDevice> Game<'a, Device> {
         self.cursor = Point::zero();
     }
     fn draw_string(&mut self, string: &str) -> Result<(), Device::Error> {
-        let text = Text::with_baseline(string, self.cursor, self.text_style, Baseline::Top);
+        let text_style = MonoTextStyleBuilder::new()
+            .font(&embedded_graphics::mono_font::ascii::FONT_6X10)
+            .text_color(BinaryColor::On)
+            .build();
+        let text = Text::with_baseline(string, self.cursor, text_style, Baseline::Top);
+        let position = self.cursor;
 
         let target = self.device.display();
-        let mut next_position = text.position;
+        let mut next_position = position;
 
-        let mut position = text.position;
+        let mut position = position;
 
-        for line in text.text.split('\n') {
+        for line in string.split('\n') {
             let p = position;
-            position.y += text
-                .text_style
-                .line_height
-                .to_absolute(text.character_style.line_height()) as i32;
+            position.y += self.font.character_size.height as i32;
 
             // remove trailing '\r' for '\r\n' line endings
             let len = line.len();
@@ -240,12 +240,12 @@ impl<'a, Device: AbstractDevice> Game<'a, Device> {
             };
 
             let mut position = position - Point::new(0, 0);
-            let char_width = self.text_style.font.character_size.width as i32;
+            let char_width = self.font.character_size.width as i32;
             for next_char in line.chars() {
                 let p = position;
                 position.x += char_width;
                 // let glyph = self.text_style.font.glyph(next_char);
-                let glyph = Glyph::new(self.text_style.font, next_char);
+                let glyph = font_progmem::Glyph::new(self.font, next_char);
                 embedded_graphics::image::Image::new(&glyph, p).draw(target)?;
             }
             next_position = position;
@@ -329,98 +329,11 @@ impl<'a, Device: AbstractDevice> Game<'a, Device> {
         Ok(())
     }
 
-    fn draw_float_string(&mut self, value: f32) -> Result<(), Device::Error> {
+    fn draw_float_string(&mut self, _value: f32) -> Result<(), Device::Error> {
         let mut buffer = [0x00u8; 12];
-        let string = format_no_std::show(&mut buffer, format_args!("{:0.1}", value))?;
-        self.draw_string(string)?;
-        // // let mut buffer = [0x00u8; 12];
-        // self.draw_string("X.X")?;
+        // let string = format_no_std::show(&mut buffer, format_args!("{:0.1}", value))?;
+        // self.draw_string(string)?;
+        self.draw_string("X.X")?;
         Ok(())
-    }
-}
-
-struct Glyph<'a> {
-    parent: &'a ImageRaw<'a, BinaryColor>,
-    area: Rectangle,
-}
-
-impl<'a> Glyph<'a> {
-    pub fn new(font: &'a MonoFont<'a>, c: char) -> Self {
-        if font.character_size.width == 0 || font.image.size().width < font.character_size.width {
-            return Self::new_unchecked(&font.image, Rectangle::zero());
-        }
-
-        let glyphs_per_row = font.image.size().width / font.character_size.width;
-
-        // Char _code_ offset from first char, most often a space
-        // E.g. first char = ' ' (32), target char = '!' (33), offset = 33 - 32 = 1
-        let glyph_index = font.glyph_mapping.index(c) as u32;
-        let row = glyph_index / glyphs_per_row;
-
-        // Top left corner of character, in pixels
-        let char_x = (glyph_index - (row * glyphs_per_row)) * font.character_size.width;
-        let char_y = row * font.character_size.height;
-
-        Self::new_unchecked(
-            &font.image,
-            Rectangle::new(
-                Point::new(char_x as i32, char_y as i32),
-                font.character_size,
-            ),
-        )
-    }
-
-    // pub(super) fn new(parent: &'a T, area: &Rectangle) -> Self {
-    //     let area = parent.bounding_box().intersection(area);
-    //
-    //     Self { parent, area }
-    // }
-
-    pub(crate) const fn new_unchecked(parent: &'a ImageRaw<BinaryColor>, area: Rectangle) -> Self {
-        Self { parent, area }
-    }
-}
-
-impl<'a> OriginDimensions for Glyph<'a> {
-    fn size(&self) -> Size {
-        self.area.size
-    }
-}
-
-// impl<'a> ImageDrawable for Glyph<'a> {
-//     type Color = BinaryColor;
-//
-//     fn draw<D>(&self, target: &mut D) -> Result<(), D::Error>
-//     where
-//         D: DrawTarget<Color=Self::Color>
-//     {
-//         todo!()
-//     }
-//
-//     fn draw_sub_image<D>(&self, target: &mut D, area: &Rectangle) -> Result<(), D::Error>
-//     where
-//         D: DrawTarget<Color=Self::Color>
-//     {
-//         todo!()
-//     }
-// }
-
-impl<'a> ImageDrawable for Glyph<'a> {
-    type Color = BinaryColor;
-
-    fn draw<DT>(&self, target: &mut DT) -> Result<(), DT::Error>
-    where
-        DT: DrawTarget<Color = Self::Color>,
-    {
-        self.parent.draw_sub_image(target, &self.area)
-    }
-
-    fn draw_sub_image<DT>(&self, target: &mut DT, area: &Rectangle) -> Result<(), DT::Error>
-    where
-        DT: DrawTarget<Color = Self::Color>,
-    {
-        let area = area.translate(self.area.top_left);
-
-        self.parent.draw_sub_image(target, &area)
     }
 }

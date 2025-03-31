@@ -21,7 +21,7 @@ arduino-hal = { git = "https://github.com/rahix/avr-hal", rev = "3c089795cadbbc7
 avr-progmem = "0.4.0"
 avr-device = { version = "0.7.0" }
 ufmt = "0.2.0"
-format_no_std = "1.2.0"
+#format_no_std = "1.2.0"
 
 [target.'cfg(target_arch = "avr")'.build-dependencies]
 proc-macro2 = "=1.0.79"
