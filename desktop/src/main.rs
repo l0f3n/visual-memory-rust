@@ -1,54 +1,38 @@
 mod error;
-use crate::error::Error;
-use embedded_graphics::geometry::Size;
-use embedded_graphics::mono_font::ascii::FONT_6X10;
-use embedded_graphics::mono_font::MonoTextStyleBuilder;
+use embedded_graphics_simulator::{BinaryColorTheme, OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window};
 use embedded_graphics::pixelcolor::BinaryColor;
-use embedded_graphics::prelude::ImageDrawable;
 use embedded_graphics_simulator::sdl2::Keycode;
-use embedded_graphics_simulator::{
-    BinaryColorTheme, OutputSettingsBuilder, SimulatorDisplay, SimulatorEvent, Window,
-};
-use program::abstract_device::{AbstractDevice, Inputs};
-use program::game::Game;
-use rand::RngCore;
 use std::thread;
 use std::time::Duration;
+use embedded_graphics::geometry::Size;
+use rand::RngCore;
+use program::abstract_device::{AbstractDevice, Inputs};
+use crate::error::Error;
+use program::game::Game;
+
 
 fn main() -> Result<(), Error> {
-    let mut display = SimulatorDisplay::<BinaryColor>::new(Size::new(128, 128));
+    let display = SimulatorDisplay::<BinaryColor>::new(Size::new(128, 32));
     let output_settings = OutputSettingsBuilder::new()
         .theme(BinaryColorTheme::OledBlue)
         .build();
     let window = Window::new("Hello World", &output_settings);
     let seed = rand::rng().next_u64();
-
-    // let text_style = MonoTextStyleBuilder::new()
-    //     .font(&FONT_6X10)
-    //     .text_color(BinaryColor::On)
-    //     .build();
-    let mut device = Device {
+    let device = Device {
         simulator_display: display,
         window,
         has_updated: false,
         inputs: Inputs::default(),
         seed,
     };
-    device.flush_display()?;
-    loop {
-        FONT_6X10.image.draw(device.display())?;
-        device.flush_display()?;
-        thread::sleep(Duration::from_millis(400))
-    }
+    let mut game = Game::new(device)?;
+    let result = game.run_game();
+        
+    if let Err(Error::Quit) = result {
     Ok(())
-    // let mut game = Game::new(device)?;
-    // let result = game.run_game();
-
-    // if let Err(Error::Quit) = result {
-    //     Ok(())
-    // } else {
-    //     result
-    // }
+    } else {
+        result
+    }
 }
 
 struct Device {
