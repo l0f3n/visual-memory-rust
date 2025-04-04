@@ -22,9 +22,9 @@ fn main() -> ! {
     let dp = arduino_hal::Peripherals::take().unwrap();
     let pins = arduino_hal::pins!(dp);
     // let display = adafruit_ssd1306::AdafruitSSD1306Driver::new(i2c);
-    let button1_pin = pins.d7.into_pull_up_input();
-    let button2_pin = pins.d8.into_pull_up_input();
-    let mut led_pin = pins.d13.into_output();
+    // let button1_pin = pins.d7.into_pull_up_input();
+    // let button2_pin = pins.d8.into_pull_up_input();
+    // let mut led_pin = pins.d13.into_output();
 
     // let mut serial = arduino_hal::default_serial!(dp, pins, 115200);
 

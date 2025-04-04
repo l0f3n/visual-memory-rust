@@ -48,24 +48,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "arduino-nano-minimized"
-version = "0.1.0"
-dependencies = [
- "arduino-hal",
- "avr-device",
- "avr-progmem",
- "display-interface",
- "embedded-graphics",
- "embedded-hal 1.0.0",
- "fastrand",
- "fixed-slice-vec",
- "panic-halt",
- "proc-macro2",
- "ssd1306",
- "ufmt",
-]
-
-[[package]]
 name = "arrayvec"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -123,17 +105,6 @@ dependencies = [
  "paste",
  "ufmt",
  "unwrap-infallible",
-]
-
-[[package]]
-name = "avr-progmem"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5e93a9dd7da8f4eb57c912367e337687e06a8db6452d8c89eeb9eff1e0d2ba2d"
-dependencies = [
- "cfg-if",
- "derivative",
- "ufmt",
 ]
 
 [[package]]
@@ -319,17 +290,6 @@ checksum = "bab697b3dbbc1750b7c8b821aa6f6e7f2480b47a99bc057a2ed7b170ebef0c51"
 dependencies = [
  "critical-section",
  "defmt",
-]
-
-[[package]]
-name = "derivative"
-version = "2.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fcc3dd5e9e9c0b295d6e1e4d811fb6f157d5ffd784b8d202fc62eac8035a770b"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
 ]
 
 [[package]]
@@ -535,10 +495,6 @@ checksum = "98de4bbd547a563b716d8dfa9aad1cb19bfab00f4fa09a6a4ed21dbcf44ce9c4"
 dependencies = [
  "num-traits",
 ]
-
-[[package]]
-name = "font_to_array"
-version = "0.1.0"
 
 [[package]]
 name = "format_no_std"
