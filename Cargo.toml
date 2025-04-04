@@ -2,7 +2,6 @@
 resolver = "2"
 members = [
     "raspberry-pi-pico",
-    "arduino-nano",
     "desktop",
     "program",
 ]
