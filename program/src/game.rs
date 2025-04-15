@@ -38,8 +38,7 @@ pub struct Game<'a, Device: AbstractDevice> {
     screen_size: Size,
 }
 
-impl<'a, Device: AbstractDevice> Game<'a, Device>
-{
+impl<'a, Device: AbstractDevice> Game<'a, Device> {
     pub fn new(mut device: Device) -> Result<Self, Device::Error> {
         let rng = fastrand::Rng::with_seed(device.get_rng_seed());
         let text_style = MonoTextStyleBuilder::new()
@@ -100,7 +99,7 @@ impl<'a, Device: AbstractDevice> Game<'a, Device>
                         } else if button2_fell {
                             sequence.push(true);
                         }
-                        self.draw_sequence(&sequence, sequence.len())?;
+                        self.draw_sequence(&sequence, sequence.len(), None)?;
                     }
                 }
                 GameState::Displaying => {
@@ -108,7 +107,7 @@ impl<'a, Device: AbstractDevice> Game<'a, Device>
                         self.display_temporary_message("Remember!", 1000)?;
                     }
                     self.draw_string(": ")?;
-                    self.draw_sequence(&sequence, sequence.len())?;
+                    self.draw_sequence(&sequence, sequence.len(), None)?;
                     self.device.set_led(true);
                     self.device.flush_display()?;
                     self.device.set_led(false);
@@ -138,7 +137,7 @@ impl<'a, Device: AbstractDevice> Game<'a, Device>
                             game_state = GameState::Failure;
                         }
                     }
-                    self.draw_sequence(&sequence, next_guess_index)?;
+                    self.draw_sequence(&sequence, next_guess_index, None)?;
                     if next_guess_index == sequence.len() {
                         game_state = GameState::Next;
                     }
@@ -153,12 +152,25 @@ impl<'a, Device: AbstractDevice> Game<'a, Device>
                 }
                 GameState::Failure => {
                     self.display_temporary_message("No!", 200)?;
-                    self.draw_string(": ")?;
-                    self.draw_sequence(&sequence, sequence.len())?;
-                    self.device.set_led(true);
-                    self.device.flush_display()?;
-                    self.device.set_led(false);
-                    self.device.delay_ms(2000);
+
+                    // Blink for a bit to show where the user messed up
+                    for i in 0..6 {
+                        self.device.display().clear(BinaryColor::Off)?;
+                        self.reset_cursor();
+                        self.draw_string(": ")?;
+
+                        let hide_index = if i % 2 == 0 {
+                            Some(next_guess_index)
+                        } else {
+                            None
+                        };
+
+                        self.draw_sequence(&sequence, sequence.len(), hide_index)?;
+                        self.device.set_led(true);
+                        self.device.flush_display()?;
+                        self.device.set_led(false);
+                        self.device.delay_ms(500);
+                    }
                     game_state = GameState::Score;
                 }
                 GameState::Score => {
@@ -208,14 +220,28 @@ impl<'a, Device: AbstractDevice> Game<'a, Device>
         &mut self,
         sequence: &FixedSliceVec<bool>,
         subset_length: usize,
+        hide_index: Option<usize>,
     ) -> Result<(), Device::Error> {
+        let hide_index = if let Some(hide_index) = hide_index {
+            hide_index
+        } else {
+            usize::MAX
+        };
+
         for i in 0..subset_length {
             let value = sequence[i];
             if i % 3 == 0 {
                 // Create a grouping that's easier to parse when facing long sequences
                 self.cursor.x += BLOCK_GROUPING_EXTRA_SPACING as i32;
             }
-            self.draw_block_wrapping(value)?;
+
+            let color = if i == hide_index {
+                BinaryColor::Off
+            } else {
+                BinaryColor::On
+            };
+
+            self.draw_block_wrapping(value, color)?;
         }
         Ok(())
     }
@@ -229,7 +255,11 @@ impl<'a, Device: AbstractDevice> Game<'a, Device>
         Ok(())
     }
 
-    fn draw_block_wrapping(&mut self, value: bool) -> Result<(), Device::Error> {
+    fn draw_block_wrapping(
+        &mut self,
+        value: bool,
+        color: BinaryColor,
+    ) -> Result<(), Device::Error> {
         if self.cursor.x as u32 > self.screen_size.width - FONT_WIDTH {
             self.cursor.x = 0;
             self.cursor.y += FONT_HEIGHT as i32;
@@ -246,7 +276,7 @@ impl<'a, Device: AbstractDevice> Game<'a, Device>
             )
         };
         block
-            .into_styled(PrimitiveStyle::with_fill(BinaryColor::On))
+            .into_styled(PrimitiveStyle::with_fill(color))
             .draw(self.device.display())?;
         self.cursor.x += FONT_WIDTH as i32 + BLOCK_SPACE as i32;
         Ok(())
